@@ -147,7 +147,7 @@ class UserService:
         if not token_info or not user_model:
             return
         # Create group if it doesn't exist
-        # TODO Remove groups not present in the token
+        current_user_group_assignments = []
         token_groups = token_info.get('groups', []) + token_info.get('role', [])
         for token_group in token_groups:
             token_group = token_group.lstrip("/")
@@ -166,6 +166,13 @@ class UserService:
             if not principal:
                 principal = PrincipalModel(group_id=group.id)
                 db.session.add(principal)
+            current_user_group_assignments.append(group.id)
+        # Now query and delete all user assignments which are not in current_user_group_assignments for this user.
+        db.session.query(UserGroupAssignmentModel).filter(
+            UserGroupAssignmentModel.user_id == user_model.id,
+            UserGroupAssignmentModel.group_id.notin_(current_user_group_assignments)
+        ).delete(synchronize_session='fetch')
+
         db.session.commit()
 
     @classmethod

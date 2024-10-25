@@ -1,9 +1,12 @@
 from typing import Any
 import time
+import json
+import copy
 from datetime import datetime
 from typing import Any, Dict
 from sqlalchemy import and_, asc, desc, cast
 from sqlalchemy.types import String
+from hashlib import sha256
 
 import flask.wrappers
 import sentry_sdk
@@ -281,17 +284,27 @@ def submit_task(
         task_id: str,
         body: Dict[str, Any],
 ) -> flask.wrappers.Response:
-    task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(task_guid=task_id).one_or_none()
-    if task_model is None:
+    human_task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(task_guid=task_id).one_or_none()
+    if human_task_model is None:
         raise ApiError(
             error_code="task_not_found",
             message=f"Cannot find a task with id '{task_id}'",
             status_code=400,
         )
-    # TODO Manage task variables submitted.
+    # Manage task variables submitted.
+    task_model: TaskModel = TaskModel.query.filter_by(guid=task_id).one_or_none()
+    # First update the variables and then submit task
+    data = copy.deepcopy(task_model.get_data())
+    for var in body.get("variables").keys():
+        data["data"][var] = body.get("variables")[var]["value"]
 
+    json_data_hash = sha256(json.dumps(data).encode("utf8")).hexdigest()
+    json_data_model = JsonDataModel(hash=json_data_hash, data=data)
+    db.session.add(json_data_model)
+    db.session.flush()
+    task_model.json_data_hash = json_data_hash
     with sentry_sdk.start_span(op="controller_action", description="tasks_controller.task_submit"):
-        response_item = _task_submit_shared(task_model.process_instance_id, task_model.task_guid, body)
+        response_item = _task_submit_shared(task_model.process_instance_id, task_model.guid, body)
         return make_response(jsonify(response_item), 200)
 
 
