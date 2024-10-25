@@ -348,12 +348,12 @@ def task_assign(
 ) -> Response:
     process_instance = _find_process_instance_by_id_or_raise(process_instance_id)
 
-    if process_instance.status != ProcessInstanceStatus.suspended.value:
-        raise ApiError(
-            error_code="error_not_suspended",
-            message="The process instance must be suspended to perform this operation",
-            status_code=400,
-        )
+    # if process_instance.status != ProcessInstanceStatus.suspended.value:
+    #     raise ApiError(
+    #         error_code="error_not_suspended",
+    #         message="The process instance must be suspended to perform this operation",
+    #         status_code=400,
+    #     )
 
     if "user_ids" not in body:
         raise ApiError(
@@ -387,6 +387,9 @@ def task_assign(
         if human_task_user is None:
             human_task_user = HumanTaskUserModel(user_id=user_id, human_task=human_task, created_at_in_seconds=round(time.time()))
             db.session.add(human_task_user)
+        else: #TODO adding this to overcome the issue with constraints. If task already had been allocated to this user, just empty the ended_at_in_secods.
+            human_task_user.ended_at_in_seconds=None
+
 
     SpiffworkflowBaseDBModel.commit_with_rollback_on_exception()
 

@@ -3459,20 +3459,27 @@ paths:
                               type: string
                     _embedded:
                       type: object
-#                      properties:
-#                        assignee:
-#                          type: array
-#                          items:
-#                            $ref: '#/components/schemas/FfUser'
-#                        processDefinition:
-#                          type: array
-#                          items:
-#                            $ref: '#/components/schemas/ProcessDefinition'
-#                        task:
-#                          type: array
-#                          items:
-#                            $ref: '#/components/schemas/FfTask'
                     count:
+                      type: integer
+  /task-filters/count:
+    post:
+      summary: Retrieve filtered tasks count based on pagination and other criteria
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.filter_tasks_count
+      responses:
+        "200":
+          description: Successfully retrieved filtered tasks count
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    count:
+                      type: integer
+                    id:
                       type: integer
   /task/{task_id}:
     parameters:
@@ -3494,6 +3501,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Task"
+
+  /task/{task_id}/variables:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        description: "The unique id of an existing task guid."
+        schema:
+          type: string
+    get:
+      tags:
+        - Tasks
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.get_task_variables_by_id
+      summary: "Get task variables"
+      responses:
+        "200":
+          description: "One task"
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /task/{task_id}/identity-links:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        description: "The unique id of an existing task guid."
+        schema:
+          type: string
+    get:
+      tags:
+        - Tasks
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.get_task_identity_links_by_id
+      summary: "Get identity links"
+      responses:
+        "200":
+          description: "One task"
+          content:
+            application/json:
+              schema:
+                type: array
 
 
   /task/{task_id}/claim:

@@ -1,7 +1,7 @@
 from typing import Any
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict
 from sqlalchemy import and_, asc, desc, cast
 from sqlalchemy.types import String
 
@@ -35,68 +35,13 @@ from sqlalchemy import func
 from .tasks_controller import task_assign
 
 
-def filter_tasks(body: dict, firstResult: int = 1, maxResults: int = 100) -> flask.wrappers.Response:
-    """Filter tasks and return the list."""
+def filter_tasks(body: Dict, firstResult: int = 1, maxResults: int = 100) -> flask.wrappers.Response:
+    """Filter tasks and return the list and count."""
     if not body or body.get('criteria') is None:
         return None
     user_model: UserModel = g.user
 
-    human_tasks_query = (
-        db.session.query(
-            HumanTaskModel, ProcessInstanceModel.id, ProcessModelInfo,
-            func.max(UserModel.username).label("process_initiator_username"),
-            func.max(UserModel.display_name).label("process_initiator_firstname"),
-            func.max(UserModel.email).label("process_initiator_email"),
-            func.max(GroupModel.identifier).label("assigned_user_group_identifier")
-        ).distinct(HumanTaskModel.id)
-        .group_by(
-            HumanTaskModel.id,  # Group by the ID of the human task
-            ProcessInstanceModel.id,  # Add the process instance ID to the GROUP BY clause
-            ProcessModelInfo.process_id,
-            # GroupModel.identifier
-        )  # type: ignore
-        .outerjoin(GroupModel, GroupModel.id == HumanTaskModel.lane_assignment_id)
-        .join(ProcessInstanceModel)
-        .join(ProcessModelInfo, ProcessModelInfo.id == ProcessInstanceModel.process_model_identifier)
-        .outerjoin(HumanTaskUserModel, and_(
-            HumanTaskModel.id == HumanTaskUserModel.human_task_id,
-            HumanTaskUserModel.ended_at_in_seconds == None
-        ))
-        .outerjoin(UserModel, UserModel.id == HumanTaskUserModel.user_id)
-        .outerjoin(TaskModel, TaskModel.guid == HumanTaskModel.task_id)
-        .outerjoin(JsonDataModel, JsonDataModel.hash == TaskModel.json_data_hash)
-        .filter(
-            HumanTaskModel.completed == False,  # noqa: E712
-            ProcessInstanceModel.status != ProcessInstanceStatus.error.value,
-        )
-    )
-
-    # Join through HumanTaskUserModel to associate users to tasks
-    if body.get('criteria').get('candidateGroupsExpression') == '${currentUserGroups()}':
-        human_tasks_query = human_tasks_query.filter(
-            GroupModel.identifier.in_([group.identifier for group in user_model.groups]))
-    if candidate_group := body.get('criteria').get('candidateGroup'):
-        human_tasks_query = human_tasks_query.filter(GroupModel.identifier == candidate_group)
-    if not body.get('criteria').get('includeAssignedTasks', False):
-        human_tasks_query = human_tasks_query.filter(~HumanTaskModel.human_task_users.any())
-
-    if process_def_key := body.get('criteria').get('processDefinitionKey'):
-        human_tasks_query = human_tasks_query.filter(ProcessInstanceModel.process_model_identifier == process_def_key)
-    if ''.join(body.get('criteria').get('assigneeExpression', '').split()) == '${currentUser()}':
-        human_tasks_query = human_tasks_query.filter(UserModel.username == user_model.username)
-    if assignee := body.get('criteria').get('assignee'):
-        human_tasks_query = human_tasks_query.filter(UserModel.username == assignee)
-    if assignee := body.get('criteria').get('assignee'):
-        human_tasks_query = human_tasks_query.filter(UserModel.username == assignee)
-
-    #  Filtering by process variables
-    process_variables = body.get('criteria', {}).get('processVariables', [])
-    if process_variables:
-        for variable in process_variables:
-            var_name = variable.get('name')
-            var_value = variable.get('value')
-            json_field = JsonDataModel.data['data'].op('->>')(var_name)
-            human_tasks_query = human_tasks_query.filter(cast(json_field, String) == var_value)
+    human_tasks_query = build_human_tasks_query(body, user_model)
 
     # Sorting logic
     sorting_criteria = body.get('criteria', {}).get('sorting', [])
@@ -119,23 +64,149 @@ def filter_tasks(body: dict, firstResult: int = 1, maxResults: int = 100) -> fla
     else:
         human_tasks_query = human_tasks_query.order_by(desc(HumanTaskModel.id))  # Order by task ID
 
-    current_app.logger.info("human_tasks_query --->")
-    current_app.logger.info(human_tasks_query)
-
+    # Paginate results for task retrieval
     human_tasks = human_tasks_query.paginate(page=firstResult, per_page=maxResults, error_out=False)
 
     return _format_response(human_tasks)
 
+def filter_tasks_count(body: Dict) -> flask.wrappers.Response:
+    """Filter tasks and return only the count."""
+    user_model: UserModel = g.user
+    response = []
+
+    for criteria in body:
+        if not criteria or criteria.get('criteria') is None:
+            return None
+
+        human_tasks_query = build_human_tasks_query(criteria, user_model)
+
+        # Get the total count of tasks
+        task_count = human_tasks_query.count()
+        response.append({
+            "name": criteria.get("name"),
+            "count": task_count,
+            "id": criteria.get("id")
+        })
+
+    return response
+
+def build_human_tasks_query(body: Dict, user_model: UserModel):
+    """Build the base query for filtering tasks."""
+    human_tasks_query = (
+        db.session.query(
+            HumanTaskModel, ProcessInstanceModel.id, ProcessModelInfo,
+            func.max(UserModel.username).label("process_initiator_username"),
+            func.max(UserModel.display_name).label("process_initiator_firstname"),
+            func.max(UserModel.email).label("process_initiator_email"),
+            func.max(GroupModel.identifier).label("assigned_user_group_identifier")
+        ).distinct(HumanTaskModel.id)
+        .group_by(
+            HumanTaskModel.id,  # Group by the ID of the human task
+            ProcessInstanceModel.id,  # Add the process instance ID to the GROUP BY clause
+            ProcessModelInfo.process_id,
+        )
+        .outerjoin(GroupModel, GroupModel.id == HumanTaskModel.lane_assignment_id)
+        .join(ProcessInstanceModel)
+        .join(ProcessModelInfo, ProcessModelInfo.id == ProcessInstanceModel.process_model_identifier)
+        .outerjoin(HumanTaskUserModel, and_(
+            HumanTaskModel.id == HumanTaskUserModel.human_task_id,
+            HumanTaskUserModel.ended_at_in_seconds == None
+        ))
+        .outerjoin(UserModel, UserModel.id == HumanTaskUserModel.user_id)
+        .outerjoin(TaskModel, TaskModel.guid == HumanTaskModel.task_id)
+        .outerjoin(JsonDataModel, JsonDataModel.hash == TaskModel.json_data_hash)
+        .filter(
+            HumanTaskModel.completed == False,  # noqa: E712
+            ProcessInstanceModel.status != ProcessInstanceStatus.error.value,
+        )
+    )
+
+    # Apply filters based on body criteria
+    if body.get('criteria').get('candidateGroupsExpression') == '${currentUserGroups()}':
+        human_tasks_query = human_tasks_query.filter(
+            GroupModel.identifier.in_([group.identifier for group in user_model.groups]))
+    if candidate_group := body.get('criteria').get('candidateGroup'):
+        human_tasks_query = human_tasks_query.filter(GroupModel.identifier == candidate_group)
+    if not body.get('criteria').get('includeAssignedTasks', False):
+        human_tasks_query = human_tasks_query.filter(~HumanTaskModel.human_task_users.any())
+
+    if process_def_key := body.get('criteria').get('processDefinitionKey'):
+        human_tasks_query = human_tasks_query.filter(ProcessInstanceModel.process_model_identifier == process_def_key)
+    if ''.join(body.get('criteria').get('assigneeExpression', '').split()) == '${currentUser()}':
+        human_tasks_query = human_tasks_query.filter(UserModel.username == user_model.username)
+    if assignee := body.get('criteria').get('assignee'):
+        human_tasks_query = human_tasks_query.filter(UserModel.username == assignee)
+
+    # Filtering by process variables
+    process_variables = body.get('criteria', {}).get('processVariables', [])
+    if process_variables:
+        for variable in process_variables:
+            var_name = variable.get('name')
+            var_value = variable.get('value')
+            json_field = JsonDataModel.data['data'].op('->>')(var_name)
+            human_tasks_query = human_tasks_query.filter(cast(json_field, String) == var_value)
+
+    return human_tasks_query
+
+
+def get_task_variables_by_id(
+        task_id: str
+) -> flask.wrappers.Response:
+    current_app.logger.debug("get_task_variables_by_id --->%s", task_id)
+
+    task : TaskModel = db.session.query(TaskModel).filter(TaskModel.guid == task_id).one_or_none()
+
+    # If no tasks are found, return an empty list
+    if not task:
+        raise ApiError(
+            error_code="task_not_found",
+            message=f"Cannot find a task with id '{task_id}'",
+            status_code=400,
+        )
+    response = {}
+    for key in task.get_data().get("data").keys():
+        response[key] = {
+            "type" : "String", #TODO
+            "value": task.get_data().get("data").get(key)
+        }
+    return response
+
+def get_task_identity_links_by_id(
+        task_id: str
+) -> flask.wrappers.Response:
+    current_app.logger.debug("get_task_identity_links_by_id --->%s", task_id)
+    db.session.query(HumanTaskModel, UserModel, GroupModel)
+    task_query = (
+        db.session.query(HumanTaskModel, UserModel, GroupModel)
+        .outerjoin(HumanTaskUserModel, and_(HumanTaskModel.id == HumanTaskUserModel.human_task_id,
+                                       HumanTaskUserModel.ended_at_in_seconds == None))
+        .outerjoin(UserModel, HumanTaskUserModel.user_id == UserModel.id)  # Join with UserModel to get user details
+        .outerjoin(GroupModel, GroupModel.id == HumanTaskModel.lane_assignment_id)
+        .filter(HumanTaskModel.task_guid == task_id)
+    )
+    tasks = task_query.all()
+
+    human_task, user, group = tasks[0]
+    response = [{
+            "userId": user.username if user else None,
+            "groupId": group.identifier,
+            "type": "candidate"
+
+    }]
+
+
+    return response
 
 def get_task_by_id(
         task_id: str
 ) -> flask.wrappers.Response:
-    # Query to join HumanTaskModel with HumanTaskUserModel
+    current_app.logger.debug("get_task_by_id --->%s", task_id)
+
     task_query = (
         db.session.query(HumanTaskModel, HumanTaskUserModel, UserModel)
-        .join(HumanTaskUserModel, and_(HumanTaskModel.id == HumanTaskUserModel.human_task_id,
+        .outerjoin(HumanTaskUserModel, and_(HumanTaskModel.id == HumanTaskUserModel.human_task_id,
                                        HumanTaskUserModel.ended_at_in_seconds == None))
-        .join(UserModel, HumanTaskUserModel.user_id == UserModel.id)  # Join with UserModel to get user details
+        .outerjoin(UserModel, HumanTaskUserModel.user_id == UserModel.id)  # Join with UserModel to get user details
         .filter(HumanTaskModel.task_guid == task_id)
     )
 
@@ -148,7 +219,7 @@ def get_task_by_id(
             message=f"Cannot find a task with id '{task_id}'",
             status_code=400,
         )
-    if not len(tasks) > 1:
+    if len(tasks) > 1:
         raise ApiError(
             error_code="more_than_one_task_found",
             message=f"More tasks found for '{task_id}'",
@@ -158,29 +229,37 @@ def get_task_by_id(
     return make_response(jsonify(format_human_task_response(human_task, user_model)), 200)
 
 
+
 def claim_task(
         task_id: str,
-        body: dict[str, Any],
+        body: Dict[str, Any],
 ) -> flask.wrappers.Response:
-    task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(id=task_id).one_or_none()
+    task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(task_guid=task_id).one_or_none()
     if task_model is None:
         raise ApiError(
             error_code="task_not_found",
             message=f"Cannot find a task with id '{task_id}'",
             status_code=400,
         )
+    user_model: UserModel = UserModel.query.filter_by(username=body.get("userId")).one_or_none()
+    if user_model is None: #TODO decide if we need to create a dummy user in this case.
+        raise ApiError(
+            error_code="user_not_found",
+            message=f"Cannot find a user with id '{task_id}'",
+            status_code=400,
+        )
 
     task_assign(modified_process_model_identifier=None, process_instance_id=task_model.process_instance_id,
-                task_guid=task_model.task_guid, body={'user_ids': [body.get("userId")]})
+                task_guid=task_model.task_guid, body={'user_ids': [user_model.id]})
 
-    return make_response(jsonify(format_human_task_response(task_model)), 200)
+    return {}
 
 
 def unclaim_task(
         task_id: str,
-        body: dict[str, Any],
+        body: Dict[str, Any],
 ) -> flask.wrappers.Response:
-    task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(id=task_id).one_or_none()
+    task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(task_guid=task_id).one_or_none()
     if task_model is None:
         raise ApiError(
             error_code="task_not_found",
@@ -198,23 +277,11 @@ def unclaim_task(
     return make_response(jsonify({"ok": True}), 200)
 
 
-def get_task_variables(  # TODO
-        task_id: int
-) -> flask.wrappers.Response:
-    pass
-
-
-def get_task_identity_links(  # TODO
-        task_id: int
-) -> flask.wrappers.Response:
-    pass
-
-
 def submit_task(
         task_id: str,
-        body: dict[str, Any],
+        body: Dict[str, Any],
 ) -> flask.wrappers.Response:
-    task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(id=task_id).one_or_none()
+    task_model: HumanTaskModel | None = HumanTaskModel.query.filter_by(task_guid=task_id).one_or_none()
     if task_model is None:
         raise ApiError(
             error_code="task_not_found",
@@ -222,9 +289,22 @@ def submit_task(
             status_code=400,
         )
     # TODO Manage task variables submitted.
+
     with sentry_sdk.start_span(op="controller_action", description="tasks_controller.task_submit"):
         response_item = _task_submit_shared(task_model.process_instance_id, task_model.task_guid, body)
         return make_response(jsonify(response_item), 200)
+
+
+def _format_task_variables(task_data: Dict):
+    variables = []
+    for key in task_data.get("data"):
+        variables.append({
+            "name": key,
+            "value": task_data.get("data")[key],
+            "type": "String" #TODO Dynamically derive this from the element value
+        })
+    return variables
+
 
 
 def _format_response(human_tasks):
@@ -254,9 +334,7 @@ def _format_response(human_tasks):
                         "taskId": task.HumanTaskModel.id
                     }
                 ],
-                "variable": [
-                    task.HumanTaskModel.task_model.get_data()  # TODO adjust to match with Camunda response
-                ]
+                "variable": _format_task_variables(task.HumanTaskModel.task_model.get_data())
             },
             "id": task.HumanTaskModel.task_guid,
             "name": task.HumanTaskModel.task_title,
@@ -365,7 +443,7 @@ def format_human_task_response(human_task: HumanTaskModel, user_model: UserModel
     return {
         "id": human_task.task_guid,
         "name": human_task.task_title or human_task.task_name,
-        "assignee": user_model.username,
+        "assignee": user_model.username if user_model else None,
         "created": datetime.utcfromtimestamp(
             human_task.created_at_in_seconds).isoformat() + "Z" if human_task.created_at_in_seconds else None,
         "due": None,  # TODO

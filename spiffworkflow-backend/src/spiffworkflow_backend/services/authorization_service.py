@@ -105,7 +105,7 @@ class AuthorizationService:
             .filter(
                 or_(
                     # found from https://stackoverflow.com/a/46783555
-                    literal(target_uri_normalized).like(PermissionTargetModel.uri),
+                    literal(target_uri_normalized).like(func.REPLACE(PermissionTargetModel.uri, '*', '%')),
                     # to check for exact matches as well
                     # see test_user_can_access_base_path_when_given_wildcard_permission unit test
                     func.REPLACE(func.REPLACE(PermissionTargetModel.uri, "/%", ""), ":%", "") == target_uri_normalized,
@@ -476,6 +476,8 @@ class AuthorizationService:
             if "groups" in user_info:
                 desired_group_identifiers = user_info["groups"]
                 desired_group_identifiers = [desired_group_identifier.lstrip("/") for desired_group_identifier in desired_group_identifiers]
+            if "role" in user_info:
+                desired_group_identifiers + user_info.get('role', [])
 
         for field_index, tenant_specific_field in enumerate(
             current_app.config["SPIFFWORKFLOW_BACKEND_OPEN_ID_TENANT_SPECIFIC_FIELDS"]
@@ -527,9 +529,9 @@ class AuthorizationService:
         # before the user signs in, because we won't know things like
         # the external service user identifier.
         cls.import_permissions_from_yaml_file(user_model)
-
-        if is_new_user:
-            UserService.add_user_to_human_tasks_if_appropriate(user_model)
+        # Commenting this out as we don't want to automatically assign tasks to users
+        # if is_new_user:
+        #     UserService.add_user_to_human_tasks_if_appropriate(user_model)
 
         # this cannot be None so ignore mypy
         return user_model  # type: ignore
