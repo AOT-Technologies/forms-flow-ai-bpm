@@ -1246,10 +1246,10 @@ class ProcessInstanceProcessor:
                         lane_assignment_id=potential_owner_hash["lane_assignment_id"],
                     )
                     db.session.add(human_task)
-
-                    for potential_owner_id in potential_owner_hash["potential_owner_ids"]:
-                        human_task_user = HumanTaskUserModel(user_id=potential_owner_id, human_task=human_task)
-                        db.session.add(human_task_user)
+                    # Not needed for formsflow.ai
+                    # for potential_owner_id in potential_owner_hash["potential_owner_ids"]:
+                    #     human_task_user = HumanTaskUserModel(user_id=potential_owner_id, human_task=human_task)
+                    #     db.session.add(human_task_user)
 
         if len(human_tasks) > 0:
             for at in human_tasks:

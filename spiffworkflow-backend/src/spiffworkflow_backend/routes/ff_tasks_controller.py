@@ -68,7 +68,8 @@ def filter_tasks(body: Dict, firstResult: int = 1, maxResults: int = 100) -> fla
         human_tasks_query = human_tasks_query.order_by(desc(HumanTaskModel.id))  # Order by task ID
 
     # Paginate results for task retrieval
-    human_tasks = human_tasks_query.paginate(page=firstResult, per_page=maxResults, error_out=False)
+    page = (firstResult // maxResults) + 1
+    human_tasks = human_tasks_query.paginate(page=page, per_page=maxResults, error_out=False)
 
     return _format_response(human_tasks)
 
