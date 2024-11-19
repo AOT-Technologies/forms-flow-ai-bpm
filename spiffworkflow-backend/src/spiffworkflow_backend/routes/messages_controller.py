@@ -98,6 +98,8 @@ def message_send(
 ) -> flask.wrappers.Response:
     receiver_message = MessageService.run_process_model_from_message(modified_message_name, body, execution_mode)
     process_instance = ProcessInstanceModel.query.filter_by(id=receiver_message.process_instance_id).first()
+
+
     response_json = {
         "task_data": process_instance.get_data(),
         "process_instance": ProcessInstanceModelSchema().dump(process_instance),

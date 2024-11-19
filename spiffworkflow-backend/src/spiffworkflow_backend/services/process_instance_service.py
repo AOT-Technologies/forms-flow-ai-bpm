@@ -111,24 +111,27 @@ class ProcessInstanceService:
         start_configuration: StartConfiguration | None = None,
     ) -> tuple[ProcessInstanceModel, StartConfiguration]:
         db.session.commit()
-        try:
-            current_git_revision = GitService.get_current_revision()
-        except GitCommandError:
-            current_git_revision = None
+        # try:
+        #     current_git_revision = GitService.get_current_revision()
+        # except GitCommandError:
+        #     current_git_revision = None
+        #TODO Implement versioning
+        current_git_revision = None
         process_instance_model = ProcessInstanceModel(
             status=ProcessInstanceStatus.not_started.value,
             process_initiator_id=user.id,
             process_model_identifier=process_model.id,
             process_model_display_name=process_model.display_name,
             start_in_seconds=round(time.time()),
-            bpmn_version_control_type="git",
-            bpmn_version_control_identifier=current_git_revision,
+            bpmn_version_control_type="database", # Database
+            bpmn_version_control_identifier=current_git_revision, # Populate from database
         )
         db.session.add(process_instance_model)
         db.session.commit()
 
         if start_configuration is None:
             start_configuration = cls.next_start_event_configuration(process_instance_model)
+
         _, delay_in_seconds, _ = start_configuration
         run_at_in_seconds = round(time.time()) + delay_in_seconds
         ProcessInstanceQueueService.enqueue_new_process_instance(process_instance_model, run_at_in_seconds)
@@ -140,6 +143,7 @@ class ProcessInstanceService:
         process_model_identifier: str,
         user: UserModel,
     ) -> ProcessInstanceModel:
+        # Get process model from database
         process_model = ProcessModelService.get_process_model(process_model_identifier)
         process_instance_model, (cycle_count, _, duration_in_seconds) = cls.create_process_instance(process_model, user)
         cls.register_process_model_cycles(process_model_identifier, cycle_count, duration_in_seconds)

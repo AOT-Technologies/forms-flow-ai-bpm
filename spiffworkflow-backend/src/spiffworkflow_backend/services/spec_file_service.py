@@ -47,10 +47,12 @@ class SpecFileService(FileSystemService):
     def get_references_for_process(
         process_model_info: ProcessModelInfo,
     ) -> list[Reference]:
-        files = FileSystemService.get_files(process_model_info)
+
+        # files = FileSystemService.get_files(process_model_info)
         references = []
-        for file in files:
-            references.extend(SpecFileService.get_references_for_file(file, process_model_info))
+        # for file in files:
+        #     references.extend(SpecFileService.get_references_for_file(file, process_model_info))
+        references.extend(SpecFileService.get_references_for_file_contents(process_model_info, process_model_info.name, process_model_info.content))
         return references
 
     @classmethod
@@ -287,19 +289,20 @@ class SpecFileService(FileSystemService):
             process_id_lookup = ReferenceCacheModel.from_spec_reference(ref, use_current_cache_generation=True)
             db.session.add(process_id_lookup)
         else:
-            if ref.relative_path() != process_id_lookup.relative_path():
-                full_bpmn_file_path = SpecFileService.full_path_from_relative_path(process_id_lookup.relative_path())
+            # if ref.relative_path() != process_id_lookup.relative_path():
+                # full_bpmn_file_path = SpecFileService.full_path_from_relative_path(process_id_lookup.relative_path())
                 # if the old relative bpmn file no longer exists, then assume things were moved around
                 # on the file system. Otherwise, assume it is a duplicate process id and error.
-                if os.path.isfile(full_bpmn_file_path):
-                    raise ProcessModelFileInvalidError(
-                        f"Process id ({ref.identifier}) has already been used for "
-                        f"{process_id_lookup.relative_path()}. It cannot be reused."
-                    )
-                else:
-                    process_id_lookup.relative_location = ref.relative_location
-                    process_id_lookup.file_name = ref.file_name
-                    db.session.add(process_id_lookup)
+                # if os.path.isfile(full_bpmn_file_path):
+                #     raise ProcessModelFileInvalidError(
+                #         f"Process id ({ref.identifier}) has already been used for "
+                #         f"{process_id_lookup.relative_path()}. It cannot be reused."
+                #     )
+                # else:
+            #TODO ff : Check if this working properly
+            process_id_lookup.relative_location = ref.relative_location
+            process_id_lookup.file_name = ref.file_name
+            db.session.add(process_id_lookup)
 
     @staticmethod
     def update_process_caller_cache(ref: Reference) -> None:

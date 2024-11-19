@@ -1,0 +1,23 @@
+version: "3.7"
+
+services:
+  spiffdb:
+    image: postgres:11
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "1111:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data1
+    networks:
+      - forms-flow-spiff-network
+
+networks:
+  forms-flow-spiff-network:
+    driver: 'bridge'
+volumes:
+  db-data:
+    driver: local

@@ -434,15 +434,15 @@ def _get_process_model_for_instantiation(
     process_model_identifier: str,
 ) -> ProcessModelInfo:
     process_model = _get_process_model(process_model_identifier)
-    if process_model.primary_file_name is None:
-        raise ApiError(
-            error_code="process_model_missing_primary_bpmn_file",
-            message=(
-                f"Process Model '{process_model_identifier}' does not have a primary"
-                " bpmn file. One must be set in order to instantiate this model."
-            ),
-            status_code=400,
-        )
+    # if process_model.primary_file_name is None:
+    #     raise ApiError(
+    #         error_code="process_model_missing_primary_bpmn_file",
+    #         message=(
+    #             f"Process Model '{process_model_identifier}' does not have a primary"
+    #             " bpmn file. One must be set in order to instantiate this model."
+    #         ),
+    #         status_code=400,
+    #     )
     return process_model
 
 
@@ -836,3 +836,14 @@ def _munge_form_ui_schema_based_on_hidden_fields_in_task_data(form_ui_schema: di
                 relevant_depth_of_ui_schema = relevant_depth_of_ui_schema[hidden_field_part]
                 if len(hidden_field_parts) == ii + 1:
                     relevant_depth_of_ui_schema["ui:widget"] = "hidden"
+
+
+def _get_task_model_by_guid(task_guid: str, process_instance_id: int) -> TaskModel:
+    task_model: TaskModel | None = TaskModel.query.filter_by(guid=task_guid, process_instance_id=process_instance_id).first()
+    if task_model is None:
+        raise ApiError(
+            error_code="task_not_found",
+            message=f"Cannot find a task with guid '{task_guid}' for process instance '{process_instance_id}'",
+            status_code=400,
+        )
+    return task_model

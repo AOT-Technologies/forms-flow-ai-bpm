@@ -582,6 +582,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProcessModel"
 
+
   /process-model-natural-language/{modified_process_group_id}:
     parameters:
       - name: modified_process_group_id
@@ -3242,6 +3243,364 @@ paths:
         "200":
           description: The requested data store.
 
+  /deployment/create:
+    post:
+      operationId: spiffworkflow_backend.routes.process_models_controller.process_model_create_formsflow
+      summary: Creates a new process model with the given parameters.
+      tags:
+        - Process Models
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                deployment_name:
+                  type: string
+                  description: The name of the deployment
+                deployment_source:
+                  type: string
+                  description: The source of the deployment
+                enable_duplicate_filtering:
+                  type: boolean
+                  description: Whether to enable duplicate filtering
+                upload:
+                  type: string
+                  format: binary
+                  description: The BPMN file to upload
+      responses:
+        "201":
+          description: Process model created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessModel"
+
+  /process-definition:
+    parameters:
+      - name: latestVersion
+        in: query
+        required: false
+        description: Return only the latest version of each process definition
+        schema:
+          type: boolean
+      - name: includeProcessDefinitionsWithoutTenantId
+        in: query
+        required: false
+        description: Include process definitions that do not have a tenant ID
+        schema:
+          type: boolean
+      - name: sortBy
+        in: query
+        required: false
+        description: Sort the results by the given field
+        schema:
+          type: string
+      - name: sortOrder
+        in: query
+        required: false
+        description: Sort the results in the specified order (asc or desc)
+        schema:
+          type: string
+      - name: firstResult
+        in: query
+        required: false
+        description: Count of the first result to return
+        schema:
+          type: integer
+      - name: maxResults
+        in: query
+        required: false
+        description: Maximum number of results to return
+        schema:
+          type: integer
+      - name: nameLike
+        in: query
+        required: false
+        description: Filter with name
+        schema:
+          type: string
+    get:
+      operationId: spiffworkflow_backend.routes.process_models_controller.process_definition_list
+      summary: Return a list of process definitions
+      tags:
+        - Process Definitions
+      responses:
+        "200":
+          description: Successfully return the requested process definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProcessModel"
+
+  /process-definition/count:
+    parameters:
+      - name: latestVersion
+        in: query
+        required: false
+        description: Return only the latest version of each process definition
+        schema:
+          type: boolean
+      - name: includeProcessDefinitionsWithoutTenantId
+        in: query
+        required: false
+        description: Include process definitions that do not have a tenant ID
+        schema:
+          type: boolean
+      - name: sortBy
+        in: query
+        required: false
+        description: Sort the results by the given field
+        schema:
+          type: string
+      - name: sortOrder
+        in: query
+        required: false
+        description: Sort the results in the specified order (asc or desc)
+        schema:
+          type: string
+      - name: firstResult
+        in: query
+        required: false
+        description: Count of the first result to return
+        schema:
+          type: integer
+      - name: maxResults
+        in: query
+        required: false
+        description: Maximum number of results to return
+        schema:
+          type: integer
+      - name: nameLike
+        in: query
+        required: false
+        description: Filter with name
+        schema:
+          type: string
+    get:
+      operationId: spiffworkflow_backend.routes.process_models_controller.process_definition_list_count
+      summary: Return the count of process models
+      tags:
+        - Process Definitions
+      responses:
+        "200":
+          description: Successfully return the requested process definitions count
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProcessModelCount"
+
+
+  /key/{process_model_identifier}/start:
+    parameters:
+      - name: process_model_identifier
+        in: path
+        required: true
+        description: The unique id of an existing process model.
+        schema:
+          type: string
+    post:
+      operationId: spiffworkflow_backend.routes.process_instances_controller.process_instance_start
+      summary: Creates and run process instance from a process model and returns the instance
+      tags:
+        - Process Instances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Workflow generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+  /task-filters:
+    post:
+      summary: Retrieve filtered tasks based on pagination and other criteria
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.filter_tasks
+      parameters:
+        - name: firstResult
+          in: query
+          required: true
+          description: The starting index of the results to return
+          schema:
+            type: integer
+        - name: maxResults
+          in: query
+          required: true
+          description: The maximum number of results to return
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Successfully retrieved filtered tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    _links:
+                      type: object
+                      properties:
+                        self:
+                          type: object
+                          properties:
+                            href:
+                              type: string
+                    _embedded:
+                      type: object
+                    count:
+                      type: integer
+  /task-filters/count:
+    post:
+      summary: Retrieve filtered tasks count based on pagination and other criteria
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.filter_tasks_count
+      responses:
+        "200":
+          description: Successfully retrieved filtered tasks count
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    count:
+                      type: integer
+                    id:
+                      type: integer
+  /task/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        description: "The unique id of an existing process group."
+        schema:
+          type: string
+    get:
+      tags:
+        - Tasks
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.get_task_by_id
+      summary: "Gets one task that a user wants to complete"
+      responses:
+        "200":
+          description: "One task"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /task/{task_id}/variables:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        description: "The unique id of an existing task guid."
+        schema:
+          type: string
+    get:
+      tags:
+        - Tasks
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.get_task_variables_by_id
+      summary: "Get task variables"
+      responses:
+        "200":
+          description: "One task"
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /task/{task_id}/identity-links:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        description: "The unique id of an existing task guid."
+        schema:
+          type: string
+    get:
+      tags:
+        - Tasks
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.get_task_identity_links_by_id
+      summary: "Get identity links"
+      responses:
+        "200":
+          description: "One task"
+          content:
+            application/json:
+              schema:
+                type: array
+
+
+  /task/{task_id}/claim:
+    post:
+      summary: "Claim task"
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.claim_task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: "The unique id of an existing process group."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Successfully claimed task"
+          content:
+            application/json:
+              schema:
+                type: object
+  /task/{task_id}/unclaim:
+    post:
+      summary: "Unclaim task"
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.unclaim_task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: "The unique id of an existing process group."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Successfully unclaimed task"
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /task/{task_id}/submit-form:
+    post:
+      summary: "Submit form"
+      operationId: spiffworkflow_backend.routes.ff_tasks_controller.submit_task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: "The unique id of an existing process group."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Successfully submitted task"
+          content:
+            application/json:
+              schema:
+                type: object
+
 components:
   securitySchemes:
     oAuth2AuthCode:
@@ -3918,3 +4277,184 @@ components:
         api_key:
           type: string
           nullable: false
+    ProcessModelCount:
+      properties:
+        count:
+          type: number
+          example: 1
+          nullable: false
+
+#    FfUser:
+#      type: object
+#      properties:
+#        _links:
+#          type: object
+#          properties:
+#            self:
+#              type: object
+#              properties:
+#                href:
+#                  type: string
+#        _embedded:
+#          type: object
+#        id:
+#          type: string
+#        firstName:
+#          type: string
+#        lastName:
+#          type: string
+#        email:
+#          type: string
+#      ProcessDefinition:
+#        type: object
+#        properties:
+#          _links:
+#            type: object
+#            additionalProperties:
+#              type: object
+#              properties:
+#                href:
+#                  type: string
+#          _embedded:
+#            type: object
+#          id:
+#            type: string
+#          key:
+#            type: string
+#          category:
+#            type: string
+#          description:
+#            type: string
+#          name:
+#            type: string
+#          versionTag:
+#            type: string
+#          version:
+#            type: integer
+#          resource:
+#            type: string
+#          deploymentId:
+#            type: string
+#          diagram:
+#            type: string
+#          suspended:
+#            type: boolean
+#          contextPath:
+#            type: string
+#    FfTask:
+#      type: object
+#      properties:
+#        _links:
+#          type: object
+#          additionalProperties:
+#            type: object
+#            properties:
+#              href:
+#                type: string
+#        _embedded:
+#          type: object
+#          properties:
+#            candidateGroups:
+#              type: array
+#              items:
+#                $ref: '#/components/schemas/CandidateGroup'
+#            variable:
+#              type: array
+#              items:
+#                $ref: '#/components/schemas/Variable'
+#        id:
+#          type: string
+#        name:
+#          type: string
+#        assignee:
+#          type: string
+#        created:
+#          type: string
+#          format: date-time
+#        due:
+#          type: string
+#          format: date-time
+#        followUp:
+#          type: string
+#          format: date-time
+#        delegationState:
+#          type: string
+#        description:
+#          type: string
+#        executionId:
+#          type: string
+#        owner:
+#          type: string
+#        parentTaskId:
+#          type: string
+#        priority:
+#          type: integer
+#        processDefinitionId:
+#          type: string
+#        processInstanceId:
+#          type: string
+#        taskDefinitionKey:
+#          type: string
+#        caseExecutionId:
+#          type: string
+#        caseInstanceId:
+#          type: string
+#        caseDefinitionId:
+#          type: string
+#        suspended:
+#          type: boolean
+#        formKey:
+#          type: string
+#        camundaFormRef:
+#          type: string
+#        tenantId:
+#          type: string
+#      CandidateGroup:
+#        type: object
+#        properties:
+#          _links:
+#            type: object
+#            properties:
+#              group:
+#                type: object
+#                properties:
+#                  href:
+#                    type: string
+#              task:
+#                type: object
+#                properties:
+#                  href:
+#                    type: string
+#          _embedded:
+#            type: object
+#          type:
+#            type: string
+#          userId:
+#            type: string
+#          groupId:
+#            type: string
+#          taskId:
+#            type: string
+#      Variable:
+#        type: object
+#        properties:
+#          _links:
+#            type: object
+#            properties:
+#              self:
+#                type: object
+#                properties:
+#                  href:
+#                    type: string
+#          _embedded:
+#            type: object
+#          name:
+#            type: string
+#          value:
+#            type: string
+#          type:
+#            type: string
+#          valueInfo:
+#            type: object
+#            additionalProperties:
+#              type: string

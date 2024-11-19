@@ -356,6 +356,8 @@ def _get_user_model_from_token(decoded_token: dict) -> UserModel | None:
                                 }
 
                     if user_info is None:
+                        # here create a user from the token.
+
                         AuthenticationService.set_user_has_logged_out()
                         raise ApiError(
                             error_code="invalid_token",
@@ -377,12 +379,14 @@ def _get_user_model_from_token(decoded_token: dict) -> UserModel | None:
                         .first()
                     )
                     if user_model is None:
-                        AuthenticationService.set_user_has_logged_out()
-                        raise ApiError(
-                            error_code="invalid_user",
-                            message="Invalid user. Please log in.",
-                            status_code=401,
-                        )
+                        user_model: UserModel = UserService.create_user_from_token(decoded_token)
+                    # if user_model is None:
+                    #     AuthenticationService.set_user_has_logged_out()
+                    #     raise ApiError(
+                    #         error_code="invalid_user",
+                    #         message="Invalid user. Please log in.",
+                    #         status_code=401,
+                    #     )
                 # no user_info
                 else:
                     AuthenticationService.set_user_has_logged_out()
@@ -400,7 +404,7 @@ def _get_user_model_from_token(decoded_token: dict) -> UserModel | None:
                 message="Invalid token. Please log in.",
                 status_code=401,
             )
-
+    UserService.sync_user_with_token(decoded_token, user_model)
     return user_model
 
 

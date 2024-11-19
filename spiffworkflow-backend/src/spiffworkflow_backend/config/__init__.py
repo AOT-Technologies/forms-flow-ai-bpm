@@ -11,6 +11,11 @@ from flask.app import Flask
 from werkzeug.utils import ImportStringError
 
 from spiffworkflow_backend.services.logging_service import setup_logger_for_app
+from dotenv import find_dotenv, load_dotenv
+
+
+# this will load all the envars from a .env file located in the project root (api)
+load_dotenv(find_dotenv())
 
 HTTP_REQUEST_TIMEOUT_SECONDS = 15
 CONNECTOR_PROXY_COMMAND_TIMEOUT = 45
@@ -206,6 +211,9 @@ def setup_config(app: Flask) -> None:
     # src/spiffworkflow_backend/config/secrets.py
     app.config.from_pyfile(os.path.join("config", "secrets.py"), silent=True)
 
+    app.config["SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR"] = os.environ.get("SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR")
+    print('----->',os.environ.get("SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR"))
+    print("app.config[SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR] ", app.config["SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR"])
     if app.config["SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR"] is None:
         raise ConfigurationError("SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR config must be set")
 
@@ -228,7 +236,7 @@ def setup_config(app: Flask) -> None:
     app.config["MAX_INSTANCE_LOCK_DURATION_IN_SECONDS"] = int(
         app.config["SPIFFWORKFLOW_BACKEND_MAX_INSTANCE_LOCK_DURATION_IN_SECONDS"]
     )
-
+    app.config["SPIFFWORKFLOW_BACKEND_OPEN_ID_CLIENT_ID"] = os.environ.get("SPIFFWORKFLOW_BACKEND_OPEN_ID_CLIENT_ID")
     if app.config.get("SPIFFWORKFLOW_BACKEND_AUTH_CONFIGS") is None:
         app.config["SPIFFWORKFLOW_BACKEND_AUTH_CONFIGS"] = [
             {
@@ -254,7 +262,7 @@ def setup_config(app: Flask) -> None:
                 "Could not find the directory specified with SPIFFWORKFLOW_BACKEND_PROCESS_INSTANCE_FILE_DATA_FILESYSTEM_PATH: "
                 f"{app.config['SPIFFWORKFLOW_BACKEND_PROCESS_INSTANCE_FILE_DATA_FILESYSTEM_PATH']}"
             )
-
+    app.config["SPIFFWORKFLOW_BACKEND_WORKFLOW_ADMIN_GROUP"] = os.environ.get("SPIFFWORKFLOW_BACKEND_WORKFLOW_ADMIN_GROUP")
     thread_local_data = threading.local()
     app.config["THREAD_LOCAL_DATA"] = thread_local_data
     _set_up_tenant_specific_fields_as_list_of_strings(app)

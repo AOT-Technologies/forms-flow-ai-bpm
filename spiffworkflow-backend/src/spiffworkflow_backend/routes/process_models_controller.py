@@ -3,11 +3,13 @@ import os
 import random
 import re
 import string
+import uuid
 from hashlib import sha256
 from typing import Any
 
 import connexion  # type: ignore
 import flask.wrappers
+import fnmatch
 from flask import current_app
 from flask import g
 from flask import jsonify
@@ -42,6 +44,113 @@ from spiffworkflow_backend.services.process_model_test_generator_service import 
 from spiffworkflow_backend.services.process_model_test_runner_service import ProcessModelTestRunner
 from spiffworkflow_backend.services.spec_file_service import ProcessModelFileInvalidError
 from spiffworkflow_backend.services.spec_file_service import SpecFileService
+from SpiffWorkflow.bpmn.parser.BpmnParser import BpmnValidator  # type: ignore
+from spiffworkflow_backend.services.custom_parser import MyCustomParser
+from lxml import etree  # type: ignore
+from spiffworkflow_backend.routes.process_instances_controller import process_instance_create
+
+
+def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Response:
+
+    _get_process_group_from_modified_identifier("formsflow")
+
+    # Validate BPMN
+    parser = MyCustomParser()
+    _content = upload.stream.read()
+    _key = None
+    _name = None
+
+    try:
+        etree_xml_parser = etree.XMLParser(resolve_entities=False, remove_comments=True, no_network=True)
+        element : etree.Element = etree.fromstring(_content, parser=etree_xml_parser)
+        parser.add_bpmn_xml(element)
+        _key = list(parser.process_parsers.keys())[0]
+        _name = parser.process_parsers.get(_key).node.attrib.get("name")
+    except Exception as exception:
+        raise ProcessModelFileInvalidError(f"Received error trying to parse bpmn xml: {str(exception)}") from exception
+    if not (process_model_info:= ProcessModelService.find_by_process_id(_key)):
+        process_model_info = ProcessModelInfo()  # type: ignore
+    # TODO Check on version management
+
+    process_model_info.display_name = _name
+    process_model_info.content = _content
+    process_model_info.id = _key
+    if process_model_info is None:
+        raise ApiError(
+            error_code="process_model_could_not_be_created",
+            message="Process Model could not be created from given body",
+            status_code=400,
+        )
+
+    ProcessModelService.add_process_model(process_model_info)
+
+    response = json.dumps(ProcessModelInfoSchema(exclude=('content',)).dump(process_model_info))
+
+    return Response(
+        response,
+        status=201,
+        mimetype="application/json",
+    )
+
+
+def process_definition_list(
+    latestVersion: bool | None = False,
+    includeProcessDefinitionsWithoutTenantId: bool | None = False,
+    sortBy: str | None = None,
+    sortOrder: str | None = None,
+    firstResult: int | None = 0,
+    maxResults: int = 100,
+    nameLike: str | None = None,
+    return_count_only: bool | None = False,
+) -> flask.wrappers.Response:
+
+    page = (firstResult // maxResults) + 1
+    per_page = maxResults
+
+    process_models = ProcessModelService.get_process_models_for_api(user=g.user, filter_by_name=nameLike)
+    process_models_to_return = ProcessModelService.get_batch(process_models, page=page, per_page=per_page)
+
+    # Convert to desired format
+    converted_process_models = [
+        {
+            "id": model.id,
+            "key": model.id,  # Assuming 'key' is same as 'id'
+            "tenantId": None,  # TODO: Need to update
+            "name": model.display_name,
+            "description": model.description,
+            "version": 1,  # Assuming version 1
+            "resource": model.files[0].name if model.files else None,
+            "deploymentId": "some_deployment_id",  # TODO: Placeholder, update with actual
+            "suspended": False,  # TODO: Do something based on model.fault_or_suspend_on_exception
+        }
+        for model in process_models_to_return
+    ]
+
+    if return_count_only:
+        return make_response(jsonify({"count": len(converted_process_models)}), 200)
+
+    return make_response(jsonify(converted_process_models), 200)
+
+
+def process_definition_list_count(
+    latestVersion: bool | None = False,
+    includeProcessDefinitionsWithoutTenantId: bool | None = False,
+    sortBy: str | None = None,
+    sortOrder: str | None = None,
+    firstResult: int | None = 0,
+    maxResults: int = 100,
+    nameLike: str | None = None,
+) -> flask.wrappers.Response:
+    return process_definition_list(
+        latestVersion,
+        includeProcessDefinitionsWithoutTenantId,
+        sortBy,
+        sortOrder,
+        firstResult,
+        maxResults,
+        nameLike,
+        True,
+    )
 
 
 def process_model_create(

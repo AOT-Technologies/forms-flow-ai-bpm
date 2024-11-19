@@ -593,14 +593,19 @@ class ProcessInstanceProcessor:
                     f"The given process model was not found: {process_model_identifier}.",
                 )
             )
-        spec_files = FileSystemService.get_files(process_model_info)
-        return cls.get_spec(spec_files, process_model_info, process_id_to_run=process_id_to_run)
+        # CHANGE HEREEEEE
+        # spec_files = FileSystemService.get_files(process_model_info)
+
+        #return cls.get_spec(spec_files, process_model_info, process_id_to_run=process_id_to_run)
+        return cls.get_spec(process_model_info, process_model_info, process_id_to_run=process_id_to_run)
 
     @classmethod
     def get_bpmn_process_instance_from_process_model(cls, process_model_identifier: str) -> BpmnWorkflow:
+        # CHANGE HEREEEEE
         (bpmn_process_spec, subprocesses) = cls.get_process_model_and_subprocesses(
             process_model_identifier,
         )
+
         bpmn_process_instance = cls.get_bpmn_process_instance_from_workflow_spec(bpmn_process_spec, subprocesses)
         cls.set_script_engine(bpmn_process_instance)
         return bpmn_process_instance
@@ -943,35 +948,52 @@ class ProcessInstanceProcessor:
         elif re.match(r"(process.?)initiator", task_lane, re.IGNORECASE):
             potential_owner_ids = [self.process_instance_model.process_initiator_id]
         else:
-            group_model = GroupModel.query.filter_by(identifier=task_lane).first()
+            group_model = self._find_or_create_group(task_lane)
             if group_model is not None:
                 lane_assignment_id = group_model.id
-            if "lane_owners" in task.data and task_lane in task.data["lane_owners"]:
+
+            if "candidate_group" in task.data: # Add capability to add group in script task.
+                group_model = self._find_or_create_group(task.data["candidate_group"])
+                if group_model is not None:
+                    lane_assignment_id = group_model.id
+
+            elif "lane_owners" in task.data and task_lane in task.data["lane_owners"]:
                 for username in task.data["lane_owners"][task_lane]:
                     lane_owner_user = UserModel.query.filter_by(username=username).first()
                     if lane_owner_user is not None:
                         potential_owner_ids.append(lane_owner_user.id)
-                self.raise_if_no_potential_owners(
-                    potential_owner_ids,
-                    (
-                        "No users found in task data lane owner list for lane:"
-                        f" {task_lane}. The user list used:"
-                        f" {task.data['lane_owners'][task_lane]}"
-                    ),
-                )
+                #TODO in formsflow tasks can come first and users or groups created later
+                # self.raise_if_no_potential_owners(
+                #     potential_owner_ids,
+                #     (
+                #         "No users found in task data lane owner list for lane:"
+                #         f" {task_lane}. The user list used:"
+                #         f" {task.data['lane_owners'][task_lane]}"
+                #     ),
+                # )
             else:
                 if group_model is None:
                     raise (NoPotentialOwnersForTaskError(f"Could not find a group with name matching lane: {task_lane}"))
                 potential_owner_ids = [i.user_id for i in group_model.user_group_assignments]
-                self.raise_if_no_potential_owners(
-                    potential_owner_ids,
-                    f"Could not find any users in group to assign to lane: {task_lane}",
-                )
+                # TODO in formsflow tasks can come first and users or groups created later
+                # self.raise_if_no_potential_owners(
+                #     potential_owner_ids,
+                #     f"Could not find any users in group to assign to lane: {task_lane}",
+                # )
 
         return {
             "potential_owner_ids": potential_owner_ids,
             "lane_assignment_id": lane_assignment_id,
         }
+
+    def _find_or_create_group(self, task_lane):
+        group_model = GroupModel.query.filter_by(identifier=task_lane).first()
+        if group_model is None:
+            group_model = GroupModel(name=task_lane, identifier=task_lane)
+            db.session.add(group_model)
+            db.session.commit()
+            db.session.refresh(group_model)
+        return group_model
 
     def extract_metadata(self) -> None:
         # we are currently not getting the metadata extraction paths based on the version in git from the process instance.
@@ -1038,6 +1060,7 @@ class ProcessInstanceProcessor:
         store_bpmn_definition_mappings: bool = False,
         full_bpmn_spec_dict: dict | None = None,
     ) -> BpmnProcessDefinitionModel:
+        # CHECK HERE
         process_bpmn_identifier = process_bpmn_properties["name"]
         process_bpmn_name = process_bpmn_properties["description"]
 
@@ -1223,10 +1246,10 @@ class ProcessInstanceProcessor:
                         lane_assignment_id=potential_owner_hash["lane_assignment_id"],
                     )
                     db.session.add(human_task)
-
-                    for potential_owner_id in potential_owner_hash["potential_owner_ids"]:
-                        human_task_user = HumanTaskUserModel(user_id=potential_owner_id, human_task=human_task)
-                        db.session.add(human_task_user)
+                    # Not needed for formsflow.ai
+                    # for potential_owner_id in potential_owner_hash["potential_owner_ids"]:
+                    #     human_task_user = HumanTaskUserModel(user_id=potential_owner_id, human_task=human_task)
+                    #     db.session.add(human_task_user)
 
         if len(human_tasks) > 0:
             for at in human_tasks:
@@ -1347,6 +1370,7 @@ class ProcessInstanceProcessor:
     def backfill_missing_spec_reference_records(
         bpmn_process_identifier: str,
     ) -> str | None:
+        #TODO CHANGE HERE TO GET ALL PROCESS MODELS From DATABASE. Then add to the ReferenceCacheModel.
         process_models = ProcessModelService.get_process_models(recursive=True)
         for process_model in process_models:
             try:
@@ -1354,7 +1378,7 @@ class ProcessInstanceProcessor:
                 bpmn_process_identifiers = refs.keys()
                 if bpmn_process_identifier in bpmn_process_identifiers:
                     SpecFileService.update_process_cache(refs[bpmn_process_identifier])
-                    return FileSystemService.full_path_to_process_model_file(process_model)
+                    return process_model.name #FileSystemService.full_path_to_process_model_file(process_model)
             except Exception:
                 current_app.logger.warning("Failed to parse process ", process_model.id)
         return None
@@ -1405,16 +1429,18 @@ class ProcessInstanceProcessor:
             if bpmn_process_identifier in bpmn_process_identifiers_in_parser:
                 continue
 
-            new_bpmn_file_full_path = ProcessInstanceProcessor.bpmn_file_full_path_from_bpmn_process_identifier(
-                bpmn_process_identifier
-            )
-            new_bpmn_files.add(new_bpmn_file_full_path)
-            dmn_file_glob = os.path.join(os.path.dirname(new_bpmn_file_full_path), "*.dmn")
-            parser.add_dmn_files_by_glob(dmn_file_glob)
+            # new_bpmn_file_full_path = ProcessInstanceProcessor.bpmn_file_full_path_from_bpmn_process_identifier(
+            #     bpmn_process_identifier
+            # )
+            # new_bpmn_files.add(new_bpmn_file_full_path)
+            new_bpmn_files.add(bpmn_process_identifier)
+            # TODO Add parsing for DMN files.
+            # dmn_file_glob = os.path.join(os.path.dirname(new_bpmn_file_full_path), "*.dmn")
+            # parser.add_dmn_files_by_glob(dmn_file_glob)
             processed_identifiers.add(bpmn_process_identifier)
 
         if new_bpmn_files:
-            parser.add_bpmn_files(new_bpmn_files)
+            parser.add_bpmn_files(new_bpmn_files) #TODO Find out how this can be done fom the Database Content
             ProcessInstanceProcessor.update_spiff_parser_with_all_process_dependency_files(parser, processed_identifiers)
 
     @staticmethod
@@ -1428,20 +1454,23 @@ class ProcessInstanceProcessor:
 
         process_id = process_id_to_run or process_model_info.primary_process_id
 
-        for file in files:
-            data = SpecFileService.get_data(process_model_info, file.name)
-            try:
-                if file.type == FileType.bpmn.value:
-                    bpmn: etree.Element = SpecFileService.get_etree_from_xml_bytes(data)
-                    parser.add_bpmn_xml(bpmn, filename=file.name)
-                elif file.type == FileType.dmn.value:
-                    dmn: etree.Element = SpecFileService.get_etree_from_xml_bytes(data)
-                    parser.add_dmn_xml(dmn, filename=file.name)
-            except XMLSyntaxError as xse:
-                raise ApiError(
-                    error_code="invalid_xml",
-                    message=f"'{file.name}' is not a valid xml file." + str(xse),
-                ) from xse
+        #TODO Need to find a way to load all the dependant BPMN, DMN etc.
+        # Add only the main file for now, for POC.
+
+        # for file in files:
+        data = process_model_info.content#.tobytes()
+        try:
+            if process_model_info.type == FileType.bpmn.value:
+                bpmn: etree.Element = SpecFileService.get_etree_from_xml_bytes(data)
+                parser.add_bpmn_xml(bpmn, filename=process_model_info.display_name)
+            elif process_model_info.type == FileType.dmn.value:
+                dmn: etree.Element = SpecFileService.get_etree_from_xml_bytes(data)
+                parser.add_dmn_xml(dmn, filename=process_model_info.display_name)
+        except XMLSyntaxError as xse:
+            raise ApiError(
+                error_code="invalid_xml",
+                message=f"'{process_model_info.display_name}' is not a valid xml file." + str(xse),
+            ) from xse
         if process_id is None or process_id == "":
             raise (
                 ApiError(

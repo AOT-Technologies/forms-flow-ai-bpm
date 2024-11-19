@@ -7,7 +7,7 @@ from typing import Any
 from typing import TypeVar
 
 from flask import current_app
-
+from spiffworkflow_backend.models.db import db
 from spiffworkflow_backend.exceptions.api_error import ApiError
 from spiffworkflow_backend.exceptions.process_entity_not_found_error import ProcessEntityNotFoundError
 from spiffworkflow_backend.interfaces import ProcessGroupLite
@@ -80,6 +80,14 @@ class ProcessModelService(FileSystemService):
 
         return False
 
+    @classmethod
+    def find_by_process_id(cls, process_model_id: str, tenant_key:str = None) -> ProcessModelInfo:
+        query = ProcessModelInfo.query.filter(ProcessModelInfo.id == process_model_id)
+        if tenant_key:
+            pass #TODO to implement with multi tenancy
+
+        return query.one_or_none()
+
     @staticmethod
     def write_json_file(file_path: str, json_data: dict, indent: int = 4, sort_keys: bool = True) -> None:
         with open(file_path, "w") as h_open:
@@ -87,9 +95,9 @@ class ProcessModelService(FileSystemService):
 
     @staticmethod
     def get_batch(
-        items: list[T],
-        page: int = 1,
-        per_page: int = 10,
+            items: list[T],
+            page: int = 1,
+            per_page: int = 10,
     ) -> list[T]:
         start = (page - 1) * per_page
         end = start + per_page
@@ -117,7 +125,8 @@ class ProcessModelService(FileSystemService):
     @classmethod
     def add_json_data_to_json_file(cls, process_model: ProcessModelInfo, file_name: str, json_data: dict) -> None:
         full_json_data = json_data
-        process_model_path = os.path.abspath(os.path.join(FileSystemService.root_path(), process_model.id_for_file_path()))
+        process_model_path = os.path.abspath(
+            os.path.join(FileSystemService.root_path(), process_model.id_for_file_path()))
         json_path = os.path.abspath(os.path.join(process_model_path, file_name))
         if os.path.exists(json_path):
             with open(json_path) as f:
@@ -127,18 +136,23 @@ class ProcessModelService(FileSystemService):
 
     @classmethod
     def save_process_model(cls, process_model: ProcessModelInfo) -> None:
-        process_model_path = os.path.abspath(os.path.join(FileSystemService.root_path(), process_model.id_for_file_path()))
-        os.makedirs(process_model_path, exist_ok=True)
-        json_path = os.path.abspath(os.path.join(process_model_path, cls.PROCESS_MODEL_JSON_FILE))
-        json_data = cls.PROCESS_MODEL_SCHEMA.dump(process_model)
-        for key in list(json_data.keys()):
-            if key not in PROCESS_MODEL_SUPPORTED_KEYS_FOR_DISK_SERIALIZATION:
-                del json_data[key]
-        cls.write_json_file(json_path, json_data)
+        # process_model_path = os.path.abspath(
+        #     os.path.join(FileSystemService.root_path(), process_model.id_for_file_path()))
+
+        # os.makedirs(process_model_path, exist_ok=True)
+        # json_path = os.path.abspath(os.path.join(process_model_path, cls.PROCESS_MODEL_JSON_FILE))
+        # json_data = cls.PROCESS_MODEL_SCHEMA.dump(process_model)
+        # for key in list(json_data.keys()):
+        #     if key not in PROCESS_MODEL_SUPPORTED_KEYS_FOR_DISK_SERIALIZATION:
+        #         del json_data[key]
+        # cls.write_json_file(json_path, json_data)
+        db.session.add(process_model)
+        db.session.commit() #TODO
 
     @classmethod
     def process_model_delete(cls, process_model_id: str) -> None:
-        instances = ProcessInstanceModel.query.filter(ProcessInstanceModel.process_model_identifier == process_model_id).all()
+        instances = ProcessInstanceModel.query.filter(
+            ProcessInstanceModel.process_model_identifier == process_model_id).all()
         if len(instances) > 0:
             raise ProcessModelWithInstancesNotDeletableError(
                 f"We cannot delete the model `{process_model_id}`, there are existing instances that depend on it."
@@ -174,58 +188,72 @@ class ProcessModelService(FileSystemService):
 
         process_model_id is the full path to the model--including groups.
         """
-        if not os.path.exists(FileSystemService.root_path()):
-            raise ProcessEntityNotFoundError("process_model_root_not_found")
+        # Return process model from database
+        # TODO Change for multi tenancy and versions
+        return ProcessModelInfo.query.filter_by(id=process_model_id).first()
 
-        model_path = os.path.abspath(os.path.join(FileSystemService.root_path(), process_model_id))
-        if cls.is_process_model(model_path):
-            return cls.get_process_model_from_relative_path(process_model_id)
-        raise ProcessEntityNotFoundError("process_model_not_found")
+        # if not os.path.exists(FileSystemService.root_path()):
+        #     raise ProcessEntityNotFoundError("process_model_root_not_found")
+        #
+        # model_path = os.path.abspath(os.path.join(FileSystemService.root_path(), process_model_id))
+        # if cls.is_process_model(model_path):
+        #     return cls.get_process_model_from_relative_path(process_model_id)
+        # raise ProcessEntityNotFoundError("process_model_not_found")
 
     @classmethod
     def get_process_models(
-        cls,
-        process_group_id: str | None = None,
-        recursive: bool | None = False,
-        include_files: bool | None = False,
+            cls,
+            process_group_id: str | None = None,
+            recursive: bool | None = False,
+            include_files: bool | None = False,
+            filter_by_name: str | None = None
     ) -> list[ProcessModelInfo]:
-        process_models = []
-        root_path = FileSystemService.root_path()
-        if process_group_id:
-            awesome_id = process_group_id.replace("/", os.sep)
-            root_path = os.path.join(root_path, awesome_id)
+        # TODO ff : Need refinements here
+        query = ProcessModelInfo.query
 
-        if recursive is None:
-            recursive = False
+        # Applying the filter by name if provided
+        if filter_by_name:
+            query = query.filter(ProcessModelInfo.display_name.like(f"{filter_by_name}"))
 
-        process_model_files = FileSystemService.walk_files(
-            root_path,
-            FileSystemService.standard_directory_predicate(recursive),
-            FileSystemService.is_process_model_json_file,
-        )
+        process_models_infos = query.all()
 
-        for file in process_model_files:
-            process_model = cls.get_process_model_from_path(file)
+        # root_path = FileSystemService.root_path()
+        # if process_group_id:
+        #     awesome_id = process_group_id.replace("/", os.sep)
+        #     root_path = os.path.join(root_path, awesome_id)
 
-            if include_files:
-                files = FileSystemService.get_sorted_files(process_model)
-                for f in files:
-                    file_contents = FileSystemService.get_data(process_model, f.name)
-                    f.file_contents = file_contents
-                process_model.files = files
-            process_models.append(process_model)
-        process_models.sort()
-        return process_models
+        # if recursive is None:
+        #     recursive = False
+
+        # process_model_files = FileSystemService.walk_files(
+        #     root_path,
+        #     FileSystemService.standard_directory_predicate(recursive),
+        #     FileSystemService.is_process_model_json_file,
+        # )
+
+        # for process_models_info in process_models_infos:
+        #     process_model = cls.get_process_model_from_path(file)
+        #
+        #     if include_files:
+        #         files = FileSystemService.get_sorted_files(process_model)
+        #         for f in files:
+        #             file_contents = FileSystemService.get_data(process_model, f.name)
+        #             f.file_contents = file_contents
+        #         process_model.files = files
+        #     process_models.append(process_model)
+        # process_models.sort()
+        return process_models_infos
 
     @classmethod
     def get_process_models_for_api(
-        cls,
-        user: UserModel,
-        process_group_id: str | None = None,
-        recursive: bool | None = False,
-        filter_runnable_by_user: bool | None = False,
-        filter_runnable_as_extension: bool | None = False,
-        include_files: bool | None = False,
+            cls,
+            user: UserModel,
+            process_group_id: str | None = None,
+            recursive: bool | None = False,
+            filter_runnable_by_user: bool | None = False,
+            filter_runnable_as_extension: bool | None = False,
+            include_files: bool | None = False,
+            filter_by_name: str | None = None
     ) -> list[ProcessModelInfo]:
         if filter_runnable_as_extension and filter_runnable_by_user:
             raise Exception(
@@ -234,7 +262,7 @@ class ProcessModelService(FileSystemService):
 
         # get the full list (before we filter it by the ones you are allowed to start)
         process_models = cls.get_process_models(
-            process_group_id=process_group_id, recursive=recursive, include_files=include_files
+            process_group_id=process_group_id, recursive=recursive, include_files=include_files, filter_by_name=filter_by_name
         )
         process_model_identifiers = [p.id for p in process_models]
 
@@ -275,17 +303,17 @@ class ProcessModelService(FileSystemService):
 
     @classmethod
     def embellish_with_is_executable_property(
-        cls, process_models: list[ProcessModelInfo], reference_cache_processes: list[ReferenceCacheModel]
+            cls, process_models: list[ProcessModelInfo], reference_cache_processes: list[ReferenceCacheModel]
     ) -> list[ProcessModelInfo]:
         for process_model in process_models:
             matching_reference_cache_process = cls.find_reference_cache_process_for_process_model(
                 reference_cache_processes, process_model
             )
             if (
-                matching_reference_cache_process
-                and matching_reference_cache_process.properties
-                and "is_executable" in matching_reference_cache_process.properties
-                and matching_reference_cache_process.properties["is_executable"] is False
+                    matching_reference_cache_process
+                    and matching_reference_cache_process.properties
+                    and "is_executable" in matching_reference_cache_process.properties
+                    and matching_reference_cache_process.properties["is_executable"] is False
             ):
                 process_model.is_executable = False
             else:
@@ -295,35 +323,36 @@ class ProcessModelService(FileSystemService):
 
     @classmethod
     def filter_by_runnable(
-        cls, process_models: list[ProcessModelInfo], reference_cache_processes: list[ReferenceCacheModel]
+            cls, process_models: list[ProcessModelInfo], reference_cache_processes: list[ReferenceCacheModel]
     ) -> list[ProcessModelInfo]:
         runnable_process_models = []
         for process_model in process_models:
             # if you want to be able to run a process model, it must have a primary file in addition to being executable
             if (
-                process_model.primary_file_name is not None
-                and process_model.primary_file_name != ""
-                and process_model.is_executable
+                    process_model.primary_file_name is not None
+                    and process_model.primary_file_name != ""
+                    and process_model.is_executable
             ):
                 runnable_process_models.append(process_model)
         return runnable_process_models
 
     @classmethod
     def find_reference_cache_process_for_process_model(
-        cls, reference_cache_processes: list[ReferenceCacheModel], process_model: ProcessModelInfo
+            cls, reference_cache_processes: list[ReferenceCacheModel], process_model: ProcessModelInfo
     ) -> ReferenceCacheModel | None:
         for reference_cache_process in reference_cache_processes:
             if (
-                reference_cache_process.identifier == process_model.primary_process_id
-                and reference_cache_process.file_name == process_model.primary_file_name
-                and reference_cache_process.relative_location == process_model.id
+                    reference_cache_process.identifier == process_model.primary_process_id
+                    and reference_cache_process.file_name == process_model.primary_file_name
+                    and reference_cache_process.relative_location == process_model.id
             ):
                 return reference_cache_process
         return None
 
     @classmethod
     def process_model_identifiers_with_permission_for_user(
-        cls, user: UserModel, permission_to_check: str, permission_base_uri: str, process_model_identifiers: list[str]
+            cls, user: UserModel, permission_to_check: str, permission_base_uri: str,
+            process_model_identifiers: list[str]
     ) -> list[str]:
         # if user has access to uri/* with that permission then there's no reason to check each one individually
         guid_of_non_existent_item_to_check_perms_against = str(uuid.uuid4())
@@ -341,7 +370,8 @@ class ProcessModelService(FileSystemService):
 
         permitted_process_model_identifiers = []
         for process_model_identifier in process_model_identifiers:
-            modified_process_model_id = ProcessModelInfo.modify_process_identifier_for_path_param(process_model_identifier)
+            modified_process_model_id = ProcessModelInfo.modify_process_identifier_for_path_param(
+                process_model_identifier)
             uri = f"{permission_base_uri}/{modified_process_model_id}"
             has_permission = AuthorizationService.permission_assignments_include(
                 permission_assignments=permission_assignments,
@@ -355,7 +385,7 @@ class ProcessModelService(FileSystemService):
 
     @classmethod
     def get_parent_group_array_and_cache_it(
-        cls, process_identifier: str, process_group_cache: dict[str, ProcessGroup]
+            cls, process_identifier: str, process_group_cache: dict[str, ProcessGroup]
     ) -> ProcessGroupLitesWithCache:
         full_group_id_path = None
         parent_group_array: list[ProcessGroupLite] = []
@@ -399,9 +429,9 @@ class ProcessModelService(FileSystemService):
 
     @classmethod
     def get_process_groups_for_api(
-        cls,
-        process_group_id: str | None = None,
-        user: UserModel | None = None,
+            cls,
+            process_group_id: str | None = None,
+            user: UserModel | None = None,
     ) -> list[ProcessGroup]:
         process_groups = cls.get_process_groups(process_group_id)
 
@@ -436,18 +466,19 @@ class ProcessModelService(FileSystemService):
             if not has_permission:
                 for pa in permission_assignments:
                     if (
-                        pa.permission == permission_to_check
-                        and pa.grant_type == PermitDeny.deny.value
-                        and AuthorizationService.target_uri_matches_actual_uri(pa.permission_target.uri, target_uri)
+                            pa.permission == permission_to_check
+                            and pa.grant_type == PermitDeny.deny.value
+                            and AuthorizationService.target_uri_matches_actual_uri(pa.permission_target.uri, target_uri)
                     ):
                         denied_parent_ids.add(f"{process_group.id}")
                     elif (
-                        pa.permission == permission_to_check
-                        and pa.grant_type == PermitDeny.permit.value
-                        and (
-                            pa.permission_target.uri.startswith(f"{target_uri}:")
-                            or pa.permission_target.uri.startswith(f"/process-models/{modified_process_group_id}:")
-                        )
+                            pa.permission == permission_to_check
+                            and pa.grant_type == PermitDeny.permit.value
+                            and (
+                                    pa.permission_target.uri.startswith(f"{target_uri}:")
+                                    or pa.permission_target.uri.startswith(
+                                f"/process-models/{modified_process_group_id}:")
+                            )
                     ):
                         has_permission = True
             if has_permission:
@@ -467,21 +498,33 @@ class ProcessModelService(FileSystemService):
 
     @classmethod
     def get_process_group(
-        cls,
-        process_group_id: str,
-        find_direct_nested_items: bool = True,
-        find_all_nested_items: bool = True,
-        create_if_not_exists: bool = False,
+            cls,
+            process_group_id: str,
+            find_direct_nested_items: bool = True,
+            find_all_nested_items: bool = True,
+            create_if_not_exists: bool = False,
     ) -> ProcessGroup:
         """Look for a given process_group, and return it."""
-        if os.path.exists(FileSystemService.root_path()):
-            process_group_path = FileSystemService.full_path_from_id(process_group_id)
-            if cls.is_process_group(process_group_path) or create_if_not_exists:
-                return cls.find_or_create_process_group(
-                    process_group_path,
-                    find_direct_nested_items=find_direct_nested_items,
-                    find_all_nested_items=find_all_nested_items,
-                )
+        return ProcessGroup(
+            # sort_index="formsflow",
+            id="formsflow",
+            display_name="formsflow.ai process group",
+            description="formsflow.ai process group",
+            process_models=[],  # TODO
+            process_groups=[],  # TODO
+            data_store_specifications={},
+            parent_groups=[],
+            display_order=0,
+            admin=False)
+
+        # if os.path.exists(FileSystemService.root_path()):
+        #     process_group_path = FileSystemService.full_path_from_id(process_group_id)
+        #     if cls.is_process_group(process_group_path) or create_if_not_exists:
+        #         return cls.find_or_create_process_group(
+        #             process_group_path,
+        #             find_direct_nested_items=find_direct_nested_items,
+        #             find_all_nested_items=find_all_nested_items,
+        #         )
 
         raise ProcessEntityNotFoundError("process_group_not_found", f"Process Group Id: {process_group_id}")
 
@@ -570,7 +613,7 @@ class ProcessModelService(FileSystemService):
     # through the subdirs of a process group instead.
     @classmethod
     def find_or_create_process_group(
-        cls, dir_path: str, find_direct_nested_items: bool = True, find_all_nested_items: bool = True
+            cls, dir_path: str, find_direct_nested_items: bool = True, find_all_nested_items: bool = True
     ) -> ProcessGroup:
         """Reads the process_group.json file, and any nested directories."""
         cat_path = os.path.join(dir_path, cls.PROCESS_GROUP_JSON_FILE)
@@ -611,7 +654,8 @@ class ProcessModelService(FileSystemService):
                         if cls.is_process_group(nested_item.path):
                             # This is a nested group
                             process_group.process_groups.append(
-                                cls.find_or_create_process_group(nested_item.path, find_all_nested_items=find_all_nested_items)
+                                cls.find_or_create_process_group(nested_item.path,
+                                                                 find_all_nested_items=find_all_nested_items)
                             )
                         elif ProcessModelService.is_process_model(nested_item.path):
                             process_group.process_models.append(
@@ -629,9 +673,9 @@ class ProcessModelService(FileSystemService):
     #   path = os.path.join(FileSystemService.root_path(), relative_path)
     @classmethod
     def __scan_process_model(
-        cls,
-        path: str,
-        name: str | None = None,
+            cls,
+            path: str,
+            name: str | None = None,
     ) -> ProcessModelInfo:
         json_file_path = os.path.join(path, cls.PROCESS_MODEL_JSON_FILE)
 
