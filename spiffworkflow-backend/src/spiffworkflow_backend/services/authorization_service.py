@@ -94,7 +94,9 @@ class AuthorizationService:
     @classmethod
     def has_permission(cls, principals: list[PrincipalModel], permission: str, target_uri: str) -> bool:
         principal_ids = [p.id for p in principals]
+        print("principal_ids ", principal_ids)
         target_uri_normalized = target_uri.removeprefix(V1_API_PATH_PREFIX)
+        print("target_uri_normalized ", target_uri_normalized)
 
         permission_assignments = (
             PermissionAssignmentModel.query.filter(PermissionAssignmentModel.principal_id.in_(principal_ids))
@@ -103,7 +105,7 @@ class AuthorizationService:
             .filter(
                 or_(
                     # found from https://stackoverflow.com/a/46783555
-                    literal(target_uri_normalized).like(PermissionTargetModel.uri),
+                    literal(target_uri_normalized).like(func.REPLACE(PermissionTargetModel.uri, '*', '%')),
                     # to check for exact matches as well
                     # see test_user_can_access_base_path_when_given_wildcard_permission unit test
                     func.REPLACE(func.REPLACE(PermissionTargetModel.uri, "/%", ""), ":%", "") == target_uri_normalized,
@@ -112,6 +114,7 @@ class AuthorizationService:
             )
             .all()
         )
+        print("permission_assignments ", permission_assignments)
 
         if len(permission_assignments) == 0:
             return False
@@ -130,6 +133,7 @@ class AuthorizationService:
     @classmethod
     def user_has_permission(cls, user: UserModel, permission: str, target_uri: str) -> bool:
         principals = UserService.all_principals_for_user(user)
+        print("principals -->", principals)
         return cls.has_permission(principals, permission, target_uri)
 
     @classmethod
@@ -349,7 +353,10 @@ class AuthorizationService:
     @classmethod
     def check_permission_for_request(cls) -> None:
         permission_string = cls.get_permission_from_http_method(request.method)
+        print("permission_string ", permission_string)
         if permission_string:
+            print("g.user ", g.user)
+            print("request.path ", request.path)
             has_permission = cls.user_has_permission(
                 user=g.user,
                 permission=permission_string,
@@ -469,6 +476,8 @@ class AuthorizationService:
             if "groups" in user_info:
                 desired_group_identifiers = user_info["groups"]
                 desired_group_identifiers = [desired_group_identifier.lstrip("/") for desired_group_identifier in desired_group_identifiers]
+            if "role" in user_info:
+                desired_group_identifiers + user_info.get('role', [])
 
         for field_index, tenant_specific_field in enumerate(
             current_app.config["SPIFFWORKFLOW_BACKEND_OPEN_ID_TENANT_SPECIFIC_FIELDS"]
@@ -520,9 +529,9 @@ class AuthorizationService:
         # before the user signs in, because we won't know things like
         # the external service user identifier.
         cls.import_permissions_from_yaml_file(user_model)
-
-        if is_new_user:
-            UserService.add_user_to_human_tasks_if_appropriate(user_model)
+        # Commenting this out as we don't want to automatically assign tasks to users
+        # if is_new_user:
+        #     UserService.add_user_to_human_tasks_if_appropriate(user_model)
 
         # this cannot be None so ignore mypy
         return user_model  # type: ignore

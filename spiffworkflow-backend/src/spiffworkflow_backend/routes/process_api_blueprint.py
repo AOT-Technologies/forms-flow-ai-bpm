@@ -836,3 +836,14 @@ def _munge_form_ui_schema_based_on_hidden_fields_in_task_data(form_ui_schema: di
                 relevant_depth_of_ui_schema = relevant_depth_of_ui_schema[hidden_field_part]
                 if len(hidden_field_parts) == ii + 1:
                     relevant_depth_of_ui_schema["ui:widget"] = "hidden"
+
+
+def _get_task_model_by_guid(task_guid: str, process_instance_id: int) -> TaskModel:
+    task_model: TaskModel | None = TaskModel.query.filter_by(guid=task_guid, process_instance_id=process_instance_id).first()
+    if task_model is None:
+        raise ApiError(
+            error_code="task_not_found",
+            message=f"Cannot find a task with guid '{task_guid}' for process instance '{process_instance_id}'",
+            status_code=400,
+        )
+    return task_model

@@ -16,6 +16,8 @@ let spiffEnvironment = '';
 let appRoutingStrategy = 'subdomain_based';
 let backendBaseUrl = null;
 let documentationUrl = null;
+let baseNameUrl = '';
+
 if ('spiffworkflowFrontendJsenv' in window) {
   if ('APP_ROUTING_STRATEGY' in window.spiffworkflowFrontendJsenv) {
     appRoutingStrategy = window.spiffworkflowFrontendJsenv.APP_ROUTING_STRATEGY;
@@ -29,6 +31,10 @@ if ('spiffworkflowFrontendJsenv' in window) {
   if ('DOCUMENTATION_URL' in window.spiffworkflowFrontendJsenv) {
     documentationUrl = window.spiffworkflowFrontendJsenv.DOCUMENTATION_URL;
   }
+}
+
+if(import.meta.env.VITE_BASENAME_URL) {
+  baseNameUrl = import.meta.env.VITE_BASENAME_URL;
 }
 
 if (!backendBaseUrl) {
@@ -46,6 +52,8 @@ if (!backendBaseUrl) {
     if (!Number.isNaN(Number(port))) {
       serverPort = Number(port) - 1;
     }
+    // TODO: Server port overrided here, Need to revisit
+    serverPort = 7000;
     hostAndPortAndPathPrefix = `${hostname}:${serverPort}`;
     protocol = 'http';
 
@@ -66,6 +74,7 @@ if (!backendBaseUrl.endsWith('/v1.0')) {
 
 const BACKEND_BASE_URL = backendBaseUrl;
 const DOCUMENTATION_URL = documentationUrl;
+const BASENAME_URL = baseNameUrl;
 
 const PROCESS_STATUSES = [
   'complete',
@@ -134,6 +143,7 @@ export {
   DATE_FORMAT_FOR_DISPLAY,
   DATE_RANGE_DELIMITER,
   BACKEND_BASE_URL,
+  BASENAME_URL,
   DOCUMENTATION_URL,
   PROCESS_STATUSES,
   SPIFF_ENVIRONMENT,

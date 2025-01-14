@@ -26,7 +26,7 @@ def upgrade():
     sa.Column('is_executable', sa.Boolean(), nullable=True),
     sa.Column('fault_or_suspend_on_exception', sa.String(), nullable=True),
     sa.Column('process_group', sa.String(), nullable=True),
-    sa.Column('content', sa.Text(), nullable=True),
+    sa.Column('content', sa.LargeBinary(), nullable=True),
     sa.Column('type', sa.String(), nullable=True),
     sa.Column('bpmn_version_control_identifier', sa.String(), nullable=True),
     sa.PrimaryKeyConstraint('process_id')

@@ -19,7 +19,7 @@ from spiffworkflow_backend.models.db import db
 from spiffworkflow_backend.models.future_task import FutureTaskModel
 from spiffworkflow_backend.models.task import TaskModel  # noqa: F401
 from spiffworkflow_backend.models.user import UserModel
-
+from flask import current_app
 
 class ProcessInstanceNotFoundError(Exception):
     pass
@@ -212,7 +212,9 @@ class ProcessInstanceModel(SpiffworkflowBaseDBModel):
     def get_data(self) -> dict:
         """Returns the data of the last completed task in this process instance."""
         last_completed_task = self.get_last_completed_task()
+        current_app.logger.info(f"get_data::last_completed_task : {last_completed_task}")
         if last_completed_task:  # pragma: no cover
+            current_app.logger.info(f"last_completed_task : {last_completed_task.json_data()}")
             return last_completed_task.json_data()
         else:
             return {}

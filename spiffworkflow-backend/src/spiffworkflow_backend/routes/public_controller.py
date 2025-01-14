@@ -253,6 +253,7 @@ def _assign_task_if_guest(task_model: TaskModel) -> bool:
                     status_code=400,
                 )
             )
+        print(f"Assigning TASK : {human_task} to USER : {g.user_id}")
         human_task_user = HumanTaskUserModel(user_id=g.user.id, human_task=human_task)
         db.session.add(human_task_user)
         db.session.commit()

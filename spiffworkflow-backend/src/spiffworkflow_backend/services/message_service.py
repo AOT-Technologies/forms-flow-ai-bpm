@@ -27,7 +27,7 @@ from spiffworkflow_backend.services.process_instance_queue_service import Proces
 from spiffworkflow_backend.services.process_instance_service import ProcessInstanceService
 from spiffworkflow_backend.services.process_instance_tmp_service import ProcessInstanceTmpService
 from spiffworkflow_backend.services.user_service import UserService
-
+from spiffworkflow_backend.scripts.get_token import create_token
 
 class MessageServiceError(Exception):
     pass
@@ -108,6 +108,7 @@ class MessageService:
                     message_instance_send.counterpart_id = message_instance_receive.id
                     db.session.add(message_instance_send)
                     db.session.commit()
+
                 if should_queue_process_instance(receiving_process_instance, execution_mode=execution_mode):
                     queue_process_instance_if_appropriate(receiving_process_instance, execution_mode=execution_mode)
                 return message_instance_receive

@@ -189,7 +189,7 @@ class ProcessModelService(FileSystemService):
         process_model_id is the full path to the model--including groups.
         """
         # Return process model from database
-        #TODO Change for multi tenancy and versions
+        # TODO Change for multi tenancy and versions
         return ProcessModelInfo.query.filter_by(id=process_model_id).first()
 
         # if not os.path.exists(FileSystemService.root_path()):
@@ -206,8 +206,17 @@ class ProcessModelService(FileSystemService):
             process_group_id: str | None = None,
             recursive: bool | None = False,
             include_files: bool | None = False,
+            filter_by_name: str | None = None
     ) -> list[ProcessModelInfo]:
-        process_models = []
+        # TODO ff : Need refinements here
+        query = ProcessModelInfo.query
+
+        # Applying the filter by name if provided
+        if filter_by_name:
+            query = query.filter(ProcessModelInfo.display_name.like(f"{filter_by_name}"))
+
+        process_models_infos = query.all()
+
         # root_path = FileSystemService.root_path()
         # if process_group_id:
         #     awesome_id = process_group_id.replace("/", os.sep)
@@ -221,8 +230,6 @@ class ProcessModelService(FileSystemService):
         #     FileSystemService.standard_directory_predicate(recursive),
         #     FileSystemService.is_process_model_json_file,
         # )
-        #TODO ff : Need refinements here
-        process_models_infos = ProcessModelInfo.query.all()
 
         # for process_models_info in process_models_infos:
         #     process_model = cls.get_process_model_from_path(file)
@@ -246,6 +253,7 @@ class ProcessModelService(FileSystemService):
             filter_runnable_by_user: bool | None = False,
             filter_runnable_as_extension: bool | None = False,
             include_files: bool | None = False,
+            filter_by_name: str | None = None
     ) -> list[ProcessModelInfo]:
         if filter_runnable_as_extension and filter_runnable_by_user:
             raise Exception(
@@ -254,7 +262,7 @@ class ProcessModelService(FileSystemService):
 
         # get the full list (before we filter it by the ones you are allowed to start)
         process_models = cls.get_process_models(
-            process_group_id=process_group_id, recursive=recursive, include_files=include_files
+            process_group_id=process_group_id, recursive=recursive, include_files=include_files, filter_by_name=filter_by_name
         )
         process_model_identifiers = [p.id for p in process_models]
 

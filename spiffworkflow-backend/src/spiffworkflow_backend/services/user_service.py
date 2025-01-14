@@ -131,6 +131,51 @@ class UserService:
             db.session.commit()
 
     @classmethod
+    def create_user_from_token(cls, token_info):
+        """Create the user, group and principal from the token."""
+        user_model: UserModel = cls.create_user(
+            username=token_info.get('preferred_username'),
+            service=token_info.get('iss'),
+            service_id=token_info.get('sub'),
+            email=token_info.get('email'),
+            display_name=token_info.get('name')
+        )
+        cls.sync_user_with_token(token_info, user_model)
+
+    @classmethod
+    def sync_user_with_token(cls, token_info, user_model):
+        if not token_info or not user_model:
+            return
+        # Create group if it doesn't exist
+        current_user_group_assignments = []
+        token_groups = token_info.get('groups', []) + token_info.get('role', [])
+        for token_group in token_groups:
+            token_group = token_group.lstrip("/")
+            group: GroupModel = GroupModel.query.filter_by(identifier=token_group).one_or_none()
+            if not group:
+                group = GroupModel(identifier=token_group)
+                db.session.add(group)
+            # Create user group assignment for this user.
+            uga: UserGroupAssignmentModel = UserGroupAssignmentModel.query.filter_by(user_id=user_model.id).filter_by(
+                group_id=group.id).one_or_none()
+            if not uga:
+                uga = UserGroupAssignmentModel(user_id=user_model.id, group_id=group.id)
+                db.session.add(uga)
+            # Create principal for this group
+            principal: PrincipalModel = PrincipalModel.query.filter_by(group_id=group.id).one_or_none()
+            if not principal:
+                principal = PrincipalModel(group_id=group.id)
+                db.session.add(principal)
+            current_user_group_assignments.append(group.id)
+        # Now query and delete all user assignments which are not in current_user_group_assignments for this user.
+        db.session.query(UserGroupAssignmentModel).filter(
+            UserGroupAssignmentModel.user_id == user_model.id,
+            UserGroupAssignmentModel.group_id.notin_(current_user_group_assignments)
+        ).delete(synchronize_session='fetch')
+
+        db.session.commit()
+
+    @classmethod
     def add_waiting_group_assignment(
             cls, username: str, group: GroupModel
     ) -> tuple[UserGroupAssignmentWaitingModel, list[UserToGroupDict]]:

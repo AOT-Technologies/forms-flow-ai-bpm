@@ -948,35 +948,52 @@ class ProcessInstanceProcessor:
         elif re.match(r"(process.?)initiator", task_lane, re.IGNORECASE):
             potential_owner_ids = [self.process_instance_model.process_initiator_id]
         else:
-            group_model = GroupModel.query.filter_by(identifier=task_lane).first()
+            group_model = self._find_or_create_group(task_lane)
             if group_model is not None:
                 lane_assignment_id = group_model.id
-            if "lane_owners" in task.data and task_lane in task.data["lane_owners"]:
+
+            if "candidate_group" in task.data: # Add capability to add group in script task.
+                group_model = self._find_or_create_group(task.data["candidate_group"])
+                if group_model is not None:
+                    lane_assignment_id = group_model.id
+
+            elif "lane_owners" in task.data and task_lane in task.data["lane_owners"]:
                 for username in task.data["lane_owners"][task_lane]:
                     lane_owner_user = UserModel.query.filter_by(username=username).first()
                     if lane_owner_user is not None:
                         potential_owner_ids.append(lane_owner_user.id)
-                self.raise_if_no_potential_owners(
-                    potential_owner_ids,
-                    (
-                        "No users found in task data lane owner list for lane:"
-                        f" {task_lane}. The user list used:"
-                        f" {task.data['lane_owners'][task_lane]}"
-                    ),
-                )
+                #TODO in formsflow tasks can come first and users or groups created later
+                # self.raise_if_no_potential_owners(
+                #     potential_owner_ids,
+                #     (
+                #         "No users found in task data lane owner list for lane:"
+                #         f" {task_lane}. The user list used:"
+                #         f" {task.data['lane_owners'][task_lane]}"
+                #     ),
+                # )
             else:
                 if group_model is None:
                     raise (NoPotentialOwnersForTaskError(f"Could not find a group with name matching lane: {task_lane}"))
                 potential_owner_ids = [i.user_id for i in group_model.user_group_assignments]
-                self.raise_if_no_potential_owners(
-                    potential_owner_ids,
-                    f"Could not find any users in group to assign to lane: {task_lane}",
-                )
+                # TODO in formsflow tasks can come first and users or groups created later
+                # self.raise_if_no_potential_owners(
+                #     potential_owner_ids,
+                #     f"Could not find any users in group to assign to lane: {task_lane}",
+                # )
 
         return {
             "potential_owner_ids": potential_owner_ids,
             "lane_assignment_id": lane_assignment_id,
         }
+
+    def _find_or_create_group(self, task_lane):
+        group_model = GroupModel.query.filter_by(identifier=task_lane).first()
+        if group_model is None:
+            group_model = GroupModel(name=task_lane, identifier=task_lane)
+            db.session.add(group_model)
+            db.session.commit()
+            db.session.refresh(group_model)
+        return group_model
 
     def extract_metadata(self) -> None:
         # we are currently not getting the metadata extraction paths based on the version in git from the process instance.
@@ -1043,6 +1060,7 @@ class ProcessInstanceProcessor:
         store_bpmn_definition_mappings: bool = False,
         full_bpmn_spec_dict: dict | None = None,
     ) -> BpmnProcessDefinitionModel:
+        # CHECK HERE
         process_bpmn_identifier = process_bpmn_properties["name"]
         process_bpmn_name = process_bpmn_properties["description"]
 
@@ -1228,10 +1246,10 @@ class ProcessInstanceProcessor:
                         lane_assignment_id=potential_owner_hash["lane_assignment_id"],
                     )
                     db.session.add(human_task)
-
-                    for potential_owner_id in potential_owner_hash["potential_owner_ids"]:
-                        human_task_user = HumanTaskUserModel(user_id=potential_owner_id, human_task=human_task)
-                        db.session.add(human_task_user)
+                    # Not needed for formsflow.ai
+                    # for potential_owner_id in potential_owner_hash["potential_owner_ids"]:
+                    #     human_task_user = HumanTaskUserModel(user_id=potential_owner_id, human_task=human_task)
+                    #     db.session.add(human_task_user)
 
         if len(human_tasks) > 0:
             for at in human_tasks:
@@ -1440,7 +1458,7 @@ class ProcessInstanceProcessor:
         # Add only the main file for now, for POC.
 
         # for file in files:
-        data = process_model_info.content.tobytes()
+        data = process_model_info.content#.tobytes()
         try:
             if process_model_info.type == FileType.bpmn.value:
                 bpmn: etree.Element = SpecFileService.get_etree_from_xml_bytes(data)

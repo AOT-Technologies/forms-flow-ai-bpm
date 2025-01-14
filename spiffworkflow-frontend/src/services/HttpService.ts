@@ -2,6 +2,7 @@
 import { BACKEND_BASE_URL } from '../config';
 import { objectIsEmpty } from '../helpers';
 import UserService from './UserService';
+import { BASENAME_URL } from '../config';
 
 const HttpMethods = {
   GET: 'GET',
@@ -183,9 +184,9 @@ backendCallProps) => {
         }
       } else if (
         !UserService.isLoggedIn() &&
-        window.location.pathname !== '/login'
+        window.location.pathname !== BASENAME_URL + '/login'
       ) {
-        window.location.href = `/login?original_url=${UserService.getCurrentLocation()}`;
+        window.location.href = BASENAME_URL + `/login?original_url=${UserService.getCurrentLocation()}`;
       }
     });
 };

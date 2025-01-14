@@ -1,3 +1,5 @@
+import uuid
+
 from spiffworkflow_backend.helpers.spiff_enum import ProcessInstanceExecutionMode
 
 # black and ruff are in competition with each other in import formatting so ignore ruff
@@ -5,6 +7,12 @@ from spiffworkflow_backend.helpers.spiff_enum import ProcessInstanceExecutionMod
 
 import json
 from typing import Any
+import time
+
+import copy
+import json
+import uuid
+from hashlib import sha256
 
 import flask.wrappers
 from flask import current_app
@@ -72,7 +80,9 @@ def process_instance_start(
     current_app.logger.info(f"Instance created succesfully : {process_instance.id}")
 
     current_app.logger.info("running the instance")
-    return process_instance_run(process_model_identifier, process_instance.id, force_run, execution_mode)
+    process_instance_response = process_instance_run(process_model_identifier, process_instance.id, force_run, execution_mode)
+
+    return process_instance_response
 
 
 def process_instance_create(

@@ -1162,3 +1162,11 @@ div.retrievalExpressionsForm {
   position: relative;
   left: 6px;
 }
+
+/* TODO: Microfrontend css */
+.hidden {
+  display: none;
+}
+.cds--content {
+  margin-top: 50px;
+}

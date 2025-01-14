@@ -91,7 +91,7 @@ def create_app() -> flask.app.Flask:
     ]
     CORS(app, origins=origins_re, max_age=3600, supports_credentials=True)
 
-    connexion_app.add_api("api.yml", base_path=V1_API_PATH_PREFIX, pythonic_params=True)
+    connexion_app.add_api("api.yml", base_path=V1_API_PATH_PREFIX, pythonic_params=False)
 
     app.json = MyJSONEncoder(app)
 

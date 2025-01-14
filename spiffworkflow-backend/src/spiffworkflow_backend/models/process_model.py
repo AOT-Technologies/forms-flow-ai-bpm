@@ -12,6 +12,8 @@ from spiffworkflow_backend.models.user import UserModel
 
 import enum
 import os
+from datetime import datetime
+
 from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
@@ -21,7 +23,7 @@ from marshmallow import Schema
 from marshmallow.decorators import post_load
 
 from spiffworkflow_backend.interfaces import ProcessGroupLite
-from spiffworkflow_backend.models.file import File
+from spiffworkflow_backend.models.file import File, CONTENT_TYPES
 
 # we only want to save these items to the json file
 PROCESS_MODEL_SUPPORTED_KEYS_FOR_DISK_SERIALIZATION = [
@@ -54,12 +56,13 @@ class ProcessModelInfo(SpiffworkflowBaseDBModel):
     process_group=db.Column(db.String, default="formsflow")
 
     # files: list[File] | None = field(default_factory=list[File])
-    content = db.Column(db.Text)
+    content = db.Column(db.LargeBinary)
     type = db.Column(db.String, default="bpmn") # BPMN or DMN
 
     # just for the API
     # parent_groups: list[ProcessGroupLite] | None = None
     bpmn_version_control_identifier= db.Column(db.String)
+    
 
     @property
     def primary_file_name(self):
@@ -87,7 +90,20 @@ class ProcessModelInfo(SpiffworkflowBaseDBModel):
 
     @property
     def files(self):
-        return [self.content]
+        file_objects = []
+        for content in [self.content]:
+            if content:
+                file = File(
+                    content_type=CONTENT_TYPES.get(self.type, "application/octet-stream"),
+                    name=(self.display_name or "bpmn_file") + '.bpmn',
+                    type=self.type,
+                    last_modified=datetime.now(),  # Placeholder for actual last modified time
+                    size=len(content),
+                    file_contents=content,
+                    process_model_id=self.id,
+                )
+                file_objects.append(file)
+        return file_objects
 
     @property
     def parent_groups(self):
@@ -122,11 +138,12 @@ class ProcessModelInfo(SpiffworkflowBaseDBModel):
 
     def serialized(self) -> dict[str, Any]:
         file_objects = self.files
-        dictionary = self.__dict__
+        dictionary = {k: v for k, v in self.__dict__.items() if k != "_sa_instance_state" and k != "content"}
         if file_objects is not None:
             serialized_files = []
             for file in file_objects:
-                serialized_files.append(file.serialized())
+                if file is not None:
+                    serialized_files.append(file.serialized())
             dictionary["files"] = serialized_files
         return dictionary
 

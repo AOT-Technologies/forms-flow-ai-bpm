@@ -45,13 +45,25 @@ const checkPathForTaskShowParams = (
 
 // required for logging out
 const getIdToken = () => {
-  return getCookie('id_token');
+  const id_token = getCookie('id_token');
+  if (id_token) {
+    return id_token;
+  }
+  return getAccessToken();
 };
 const getAccessToken = () => {
-  return getCookie('access_token');
+  const accessToken = getCookie('access_token');
+  if (accessToken) {
+    return accessToken;
+  }
+  return localStorage.getItem('AUTH_TOKEN');
 };
 const getAuthenticationIdentifier = () => {
-  return getCookie('authentication_identifier');
+  const authentication_identifier = getCookie('authentication_identifier');
+  if (authentication_identifier) {
+    return authentication_identifier;
+  }
+  return 'default'
 };
 
 const isLoggedIn = () => {
