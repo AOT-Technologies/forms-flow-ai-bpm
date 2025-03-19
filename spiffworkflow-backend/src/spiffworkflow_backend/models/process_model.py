@@ -49,11 +49,13 @@ class ProcessModelInfo(SpiffworkflowBaseDBModel):
     process_id = db.Column(db.Integer, primary_key=True)
     id = db.Column(db.String)
     display_name = db.Column(db.String)
-    description= db.Column(db.String)
+    description = db.Column(db.String)
     is_executable = db.Column(db.Boolean)
     fault_or_suspend_on_exception = db.Column(db.String, default=NotificationType.fault.value)
+    primary_file_name = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
+    primary_process_id = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
 
-    process_group=db.Column(db.String, default="formsflow")
+    process_group = db.Column(db.String, default="formsflow")
 
     # files: list[File] | None = field(default_factory=list[File])
     content = db.Column(db.LargeBinary)
@@ -61,16 +63,7 @@ class ProcessModelInfo(SpiffworkflowBaseDBModel):
 
     # just for the API
     # parent_groups: list[ProcessGroupLite] | None = None
-    bpmn_version_control_identifier= db.Column(db.String)
-    
-
-    @property
-    def primary_file_name(self):
-        return None
-
-    @property
-    def primary_process_id(self):
-        return self.id
+    bpmn_version_control_identifier = db.Column(db.String)
 
     @property
     def exception_notification_addresses(self):
