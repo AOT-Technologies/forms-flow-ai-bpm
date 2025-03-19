@@ -64,6 +64,8 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
         etree_xml_parser = etree.XMLParser(resolve_entities=False, remove_comments=True, no_network=True)
         element : etree.Element = etree.fromstring(_content, parser=etree_xml_parser)
         parser.add_bpmn_xml(element)
+        pids = parser.get_process_ids()
+        subprocesses = parser.get_subprocess_specs(name=pids[0])
         _key = list(parser.process_parsers.keys())[0]
         _name = parser.process_parsers.get(_key).node.attrib.get("name")
     except Exception as exception:
@@ -75,6 +77,8 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
     process_model_info.display_name = _name
     process_model_info.content = _content
     process_model_info.id = _key
+    process_model_info.primary_process_id = _key
+    process_model_info.primary_file_name = f"{_key}.bpmn"
     if process_model_info is None:
         raise ApiError(
             error_code="process_model_could_not_be_created",
@@ -83,6 +87,15 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
         )
 
     ProcessModelService.add_process_model(process_model_info)
+    for key, subprocess in subprocesses.items():
+        subprocess_model = ProcessModelInfo(
+            display_name=subprocess.description,
+            content=_content,
+            id=key,
+            primary_process_id=_key,
+            primary_file_name=f"{_key}.bpmn"
+        )
+        ProcessModelService.add_process_model(subprocess_model)
 
     response = json.dumps(ProcessModelInfoSchema(exclude=('content',)).dump(process_model_info))
 

@@ -177,11 +177,10 @@ class SpecFileService(FileSystemService):
 
             if ref.prop_is_true("is_primary"):
                 update_hash = {}
+                if process_model_info.primary_process_id != ref.identifier:
+                    update_hash["primary_process_id"] = ref.identifier
                 if not process_model_info.primary_file_name:
-                    update_hash["primary_process_id"] = ref.identifier
                     update_hash["primary_file_name"] = file_name
-                elif file_name == process_model_info.primary_file_name:
-                    update_hash["primary_process_id"] = ref.identifier
 
                 if len(update_hash) > 0:
                     ProcessModelService.update_process_model(
