@@ -715,3 +715,33 @@ class ProcessModelService(FileSystemService):
             # we don't store `id` in the json files, so we add it in here
             process_model_info.id = name
         return process_model_info
+
+    @classmethod
+    def get_dmn_models(
+            cls,
+            process_model_ids: list | None = None
+    ) -> list[ProcessModelInfo]:
+        query = ProcessModelInfo.query
+        if process_model_ids:
+            query = query.filter(ProcessModelInfo.id.in_(process_model_ids))
+        return query.all()
+
+    @classmethod
+    def find_dmn_by_process_id(cls, process_id: str) -> ProcessModelInfo:
+        dmn_model = cls.find_by_process_id(process_id)
+        if dmn_model is None:
+            raise ApiError(
+                error_code="process_model_cannot_be_found",
+                message=f"DMN process model cannot be found: {process_id}",
+                status_code=400,
+            )
+        return dmn_model
+
+    @classmethod
+    def get_or_create_process_model(cls, process_id: str, **attrs) -> ProcessModelInfo:
+        if not (process_model := cls.find_by_process_id(process_id)):
+            process_model = ProcessModelInfo()  # type: ignore
+        for key, value in attrs.items():
+            if hasattr(process_model, key):
+                setattr(process_model, key, value)
+        return process_model
