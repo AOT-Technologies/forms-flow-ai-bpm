@@ -23,7 +23,7 @@ from spiffworkflow_backend.models.db import db
 from spiffworkflow_backend.models.file import FileType
 from spiffworkflow_backend.models.process_group import ProcessGroup
 from spiffworkflow_backend.models.process_instance_report import ProcessInstanceReportModel
-from spiffworkflow_backend.models.process_model import ProcessModelInfo
+from spiffworkflow_backend.models.process_model import ProcessModelInfo, ProcessType
 from spiffworkflow_backend.models.process_model import ProcessModelInfoSchema
 from spiffworkflow_backend.models.reference_cache import ReferenceCacheModel
 from spiffworkflow_backend.routes.process_api_blueprint import _commit_and_push_to_git
@@ -59,26 +59,46 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
     _content = upload.stream.read()
     _key = None
     _name = None
+    subprocesses = {}
 
     try:
         etree_xml_parser = etree.XMLParser(resolve_entities=False, remove_comments=True, no_network=True)
         element : etree.Element = etree.fromstring(_content, parser=etree_xml_parser)
-        parser.add_bpmn_xml(element)
-        pids = parser.get_process_ids()
-        subprocesses = parser.get_subprocess_specs(name=pids[0])
-        _key = list(parser.process_parsers.keys())[0]
-        _name = parser.process_parsers.get(_key).node.attrib.get("name")
+
+        # Extract namespace from the root tag
+        namespace = element.tag[element.tag.find("{") + 1:element.tag.find("}")]
+        namespace = namespace.lower()
+
+        if ProcessType.BPMN.value in namespace:
+            parser.add_bpmn_xml(element)
+            parser._find_dependencies(element)
+            dmn_dependencies = parser.get_dmn_dependencies()
+            for dmn_dependency in dmn_dependencies:
+                dmn_model = ProcessModelService.find_dmn_by_process_id(dmn_dependency)
+                elm = etree.fromstring(dmn_model.content, parser=etree_xml_parser)
+                parser.add_dmn_xml(elm)
+            pids = parser.get_process_ids()
+            subprocesses = parser.get_subprocess_specs(name=pids[0])
+            process_type = ProcessType.BPMN.value
+            _key = list(parser.process_parsers.keys())[0]
+            _name = parser.process_parsers.get(_key).node.attrib.get("name")
+        elif ProcessType.DMN.value in namespace:
+            parser.add_dmn_xml(element)
+            process_type = ProcessType.DMN.value
+            _key = list(parser.dmn_parsers.keys())[0]
+            _name = parser.dmn_parsers.get(_key).node.attrib.get("name")
     except Exception as exception:
         raise ProcessModelFileInvalidError(f"Received error trying to parse bpmn xml: {str(exception)}") from exception
-    if not (process_model_info:= ProcessModelService.find_by_process_id(_key)):
-        process_model_info = ProcessModelInfo()  # type: ignore
-    # TODO Check on version management
 
-    process_model_info.display_name = _name
-    process_model_info.content = _content
-    process_model_info.id = _key
-    process_model_info.primary_process_id = _key
-    process_model_info.primary_file_name = f"{_key}.bpmn"
+    # # TODO Check on version management
+    process_model_info = ProcessModelService.get_or_create_process_model(process_id=_key,
+                                                                        display_name=_name,
+                                                                        content=_content,
+                                                                        id=_key,
+                                                                        primary_process_id=_key,
+                                                                        primary_file_name=f"{_key}.{process_type}",
+                                                                        type=process_type
+                                                                    )
     if process_model_info is None:
         raise ApiError(
             error_code="process_model_could_not_be_created",
@@ -88,13 +108,13 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
 
     ProcessModelService.add_process_model(process_model_info)
     for key, subprocess in subprocesses.items():
-        subprocess_model = ProcessModelInfo(
-            display_name=subprocess.description,
-            content=_content,
-            id=key,
-            primary_process_id=_key,
-            primary_file_name=f"{_key}.bpmn"
-        )
+        subprocess_model = ProcessModelService.get_or_create_process_model(process_id=key,
+                                                                           display_name=subprocess.description,
+                                                                           content=_content,
+                                                                           id=key,
+                                                                           primary_process_id=_key,
+                                                                           primary_file_name=f"{_key}.bpmn"
+                                                                        )
         ProcessModelService.add_process_model(subprocess_model)
 
     response = json.dumps(ProcessModelInfoSchema(exclude=('content',)).dump(process_model_info))

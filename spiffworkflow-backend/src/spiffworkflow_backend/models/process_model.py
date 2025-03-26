@@ -42,6 +42,11 @@ class NotificationType(enum.Enum):
     suspend = "suspend"
 
 
+class ProcessType(enum.Enum):
+    BPMN = "bpmn"
+    DMN = "dmn"
+
+
 @dataclass
 class ProcessModelInfo(SpiffworkflowBaseDBModel):
     sort_index: str = field(init=False)
@@ -59,7 +64,7 @@ class ProcessModelInfo(SpiffworkflowBaseDBModel):
 
     # files: list[File] | None = field(default_factory=list[File])
     content = db.Column(db.LargeBinary)
-    type = db.Column(db.String, default="bpmn") # BPMN or DMN
+    type = db.Column(db.String, default=ProcessType.BPMN.value)  # BPMN or DMN
 
     # just for the API
     # parent_groups: list[ProcessGroupLite] | None = None

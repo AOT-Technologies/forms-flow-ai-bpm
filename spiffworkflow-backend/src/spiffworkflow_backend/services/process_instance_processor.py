@@ -97,7 +97,7 @@ from spiffworkflow_backend.services.process_instance_tmp_service import ProcessI
 from spiffworkflow_backend.services.process_model_service import ProcessModelService
 from spiffworkflow_backend.services.service_task_service import CustomServiceTask
 from spiffworkflow_backend.services.service_task_service import ServiceTaskDelegate
-from spiffworkflow_backend.services.spec_file_service import SpecFileService
+from spiffworkflow_backend.services.spec_file_service import ProcessModelFileInvalidError, SpecFileService
 from spiffworkflow_backend.services.task_service import StartAndEndTimes
 from spiffworkflow_backend.services.task_service import TaskService
 from spiffworkflow_backend.services.user_service import UserService
@@ -1463,6 +1463,12 @@ class ProcessInstanceProcessor:
             if process_model_info.type == FileType.bpmn.value:
                 bpmn: etree.Element = SpecFileService.get_etree_from_xml_bytes(data)
                 parser.add_bpmn_xml(bpmn, filename=process_model_info.display_name)
+                parser._find_dependencies(bpmn)
+                dmn_dependencies = parser.get_dmn_dependencies()
+                for dmn_dependency in dmn_dependencies:
+                    dmn_model = dmn_model = ProcessModelService.find_dmn_by_process_id(dmn_dependency)
+                    elm = SpecFileService.get_etree_from_xml_bytes(dmn_model.content)
+                    parser.add_dmn_xml(elm)
             elif process_model_info.type == FileType.dmn.value:
                 dmn: etree.Element = SpecFileService.get_etree_from_xml_bytes(data)
                 parser.add_dmn_xml(dmn, filename=process_model_info.display_name)
