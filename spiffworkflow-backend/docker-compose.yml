@@ -17,62 +17,42 @@
 # There may be a better way to do this but if it works, then it works.
 
 version: "3.8"
+include:
+  - db-docker-compose.yml
 services:
-  db:
-    container_name: db
-    image: mysql:8.0.29
-    platform: linux/amd64
-    cap_add:
-      - SYS_NICE
-    restart: "${SPIFFWORKFLOW_BACKEND_DATABASE_DOCKER_RESTART_POLICY:-no}"
-    environment:
-      - MYSQL_DATABASE=${SPIFFWORKFLOW_BACKEND_DATABASE_NAME:-spiffworkflow_backend_development}
-      - MYSQL_ROOT_PASSWORD=${SPIFFWORKFLOW_BACKEND_MYSQL_ROOT_DATABASE:-my-secret-pw}
-      - MYSQL_TCP_PORT=7003
-    network_mode: host
-    ports:
-      - "7003"
-    volumes:
-      - spiffworkflow_backend:/var/lib/mysql
-    healthcheck:
-      test: mysql --user=root --password=${SPIFFWORKFLOW_BACKEND_MYSQL_ROOT_DATABASE:-my-secret-pw} -e 'select 1' ${SPIFFWORKFLOW_BACKEND_DATABASE_NAME:-spiffworkflow_backend_development}
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   spiffworkflow-backend: &spiffworkflow-backend
-    container_name: spiffworkflow-backend
+    container_name: spiffworkflow-backend-api
     profiles:
       - run
     depends_on:
-      db:
+      spiffdb:
         condition: service_healthy
     build:
       context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
       - FLASK_DEBUG=0
       - FLASK_SESSION_SECRET_KEY=${FLASK_SESSION_SECRET_KEY:-e7711a3ba96c46c68e084a86952de16f}
       - SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR=/app/process_models
-      - SPIFFWORKFLOW_BACKEND_DATABASE_URI=mysql+mysqldb://root:${SPIFFWORKFLOW_BACKEND_MYSQL_ROOT_DATABASE:-my-secret-pw}@127.0.0.1:7003/${SPIFFWORKFLOW_BACKEND_DATABASE_NAME:-spiffworkflow_backend_development}
       - SPIFFWORKFLOW_BACKEND_ENV=${SPIFFWORKFLOW_BACKEND_ENV:-local_development}
       - SPIFFWORKFLOW_BACKEND_LOAD_FIXTURE_DATA=${SPIFFWORKFLOW_BACKEND_LOAD_FIXTURE_DATA:-false}
-      - SPIFFWORKFLOW_BACKEND_OPEN_ID_SERVER_URL=${SPIFFWORKFLOW_BACKEND_OPEN_ID_SERVER_URL:-http://localhost:7002/realms/spiffworkflow}
       - SPIFFWORKFLOW_BACKEND_PERMISSIONS_FILE_NAME=${SPIFFWORKFLOW_BACKEND_PERMISSIONS_FILE_NAME:-acceptance_tests.yml}
-      - SPIFFWORKFLOW_BACKEND_PORT=7000
         # the background scheduler picks up process instances that we set in a certain state and then runs them like running not_started instances
         # that are required for the process instance filter test. So for now do not run it. we may want to find another way around in the future
       - SPIFFWORKFLOW_BACKEND_RUN_BACKGROUND_SCHEDULER_IN_CREATE_APP=false
-      - SPIFFWORKFLOW_BACKEND_URL_FOR_FRONTEND=${SPIFFWORKFLOW_BACKEND_URL_FOR_FRONTEND:-http://localhost:7001}
       - SPIFFWORKFLOW_BACKEND_UPGRADE_DB=true
-      - SPIFFWORKFLOW_BACKEND_URL=${SPIFFWORKFLOW_BACKEND_URL:-http://localhost:7000}
     ports:
-      - "7000:7000"
-    network_mode: host
+      - "8000:8000"
     volumes:
       - ${SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR:-../../sample-process-models}:/app/process_models
       - ./log:/app/log
+    networks:
+      - forms-flow-spiff-network
+    command: /app/bin/boot_server_in_docker
     healthcheck:
-      test: curl localhost:7000/v1.0/status --fail
+      test: curl localhost:8000/v1.0/status --fail
       interval: 10s
       timeout: 5s
       retries: 20
@@ -96,7 +76,41 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+  spiffworkflow-backend-celery:
+    depends_on:
+      spiffdb:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - FLASK_DEBUG=0
+      - FLASK_SESSION_SECRET_KEY=${FLASK_SESSION_SECRET_KEY:-e7711a3ba96c46c68e084a86952de16f}
+      - SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR=/app/process_models
+      - SPIFFWORKFLOW_BACKEND_ENV=${SPIFFWORKFLOW_BACKEND_ENV:-local_development}
+      - SPIFFWORKFLOW_BACKEND_LOAD_FIXTURE_DATA=${SPIFFWORKFLOW_BACKEND_LOAD_FIXTURE_DATA:-false}
+      - SPIFFWORKFLOW_BACKEND_PERMISSIONS_FILE_NAME=${SPIFFWORKFLOW_BACKEND_PERMISSIONS_FILE_NAME:-acceptance_tests.yml}
+        # the background scheduler picks up process instances that we set in a certain state and then runs them like running not_started instances
+        # that are required for the process instance filter test. So for now do not run it. we may want to find another way around in the future
+      - SPIFFWORKFLOW_BACKEND_RUN_BACKGROUND_SCHEDULER_IN_CREATE_APP=false
+      - SPIFFWORKFLOW_BACKEND_UPGRADE_DB=true
+    volumes:
+      - ${SPIFFWORKFLOW_BACKEND_BPMN_SPEC_ABSOLUTE_DIR:-../../sample-process-models}:/app/process_models
+      - ./log:/app/log
+    networks:
+      - forms-flow-spiff-network
+    healthcheck:
+      test: cat /etc/hosts
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    command: /app/bin/start_celery_worker
 
 volumes:
   spiffworkflow_backend:
     driver: local
+networks:
+  forms-flow-spiff-network:
+    driver: 'bridge'
