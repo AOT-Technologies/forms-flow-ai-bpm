@@ -17,7 +17,7 @@ from spiffworkflow_backend.models.process_group import PROCESS_GROUP_SUPPORTED_K
 from spiffworkflow_backend.models.process_group import ProcessGroup
 from spiffworkflow_backend.models.process_group import ProcessGroupSchema
 from spiffworkflow_backend.models.process_instance import ProcessInstanceModel
-from spiffworkflow_backend.models.process_model import PROCESS_MODEL_SUPPORTED_KEYS_FOR_DISK_SERIALIZATION
+from spiffworkflow_backend.models.process_model import PROCESS_MODEL_SUPPORTED_KEYS_FOR_DISK_SERIALIZATION, ProcessType
 from spiffworkflow_backend.models.process_model import ProcessModelInfo
 from spiffworkflow_backend.models.process_model import ProcessModelInfoSchema
 from spiffworkflow_backend.models.reference_cache import Reference
@@ -719,11 +719,14 @@ class ProcessModelService(FileSystemService):
     @classmethod
     def get_dmn_models(
             cls,
-            process_model_ids: list | None = None
+            process_group_id: str | None = None,
+            recursive: bool | None = False,
+            include_files: bool | None = False,
+            filter_by_name: str | None = None
     ) -> list[ProcessModelInfo]:
-        query = ProcessModelInfo.query
-        if process_model_ids:
-            query = query.filter(ProcessModelInfo.id.in_(process_model_ids))
+        query = ProcessModelInfo.query.filter(ProcessModelInfo.type==ProcessType.DMN.value)
+        if filter_by_name:
+            query = query.filter(ProcessModelInfo.display_name.like(f"{filter_by_name}"))
         return query.all()
 
     @classmethod
@@ -745,3 +748,60 @@ class ProcessModelService(FileSystemService):
             if hasattr(process_model, key):
                 setattr(process_model, key, value)
         return process_model
+
+    @classmethod
+    def get_dmn_models_for_api(
+            cls,
+            user: UserModel,
+            process_group_id: str | None = None,
+            recursive: bool | None = False,
+            filter_runnable_by_user: bool | None = False,
+            filter_runnable_as_extension: bool | None = False,
+            include_files: bool | None = False,
+            filter_by_name: str | None = None
+    ) -> list[ProcessModelInfo]:
+        if filter_runnable_as_extension and filter_runnable_by_user:
+            raise Exception(
+                "It is not valid to filter process models by both filter_runnable_by_user and filter_runnable_as_extension"
+            )
+
+        # get the full list (before we filter it by the ones you are allowed to start)
+        process_models = cls.get_dmn_models(
+            process_group_id=process_group_id, recursive=recursive, include_files=include_files, filter_by_name=filter_by_name
+        )
+        process_model_identifiers = [p.id for p in process_models]
+
+        permission_to_check = "read"
+        permission_base_uri = "/v1.0/process-models"
+        extension_prefix = current_app.config["SPIFFWORKFLOW_BACKEND_EXTENSIONS_PROCESS_MODEL_PREFIX"]
+        if filter_runnable_by_user:
+            permission_to_check = "create"
+            permission_base_uri = "/v1.0/process-instances"
+        if filter_runnable_as_extension:
+            permission_to_check = "create"
+            permission_base_uri = "/v1.0/extensions"
+            process_model_identifiers = [p.id.replace(f"{extension_prefix}/", "") for p in process_models]
+
+        # these are the ones (identifiers, at least) you are allowed to start
+        permitted_process_model_identifiers = cls.process_model_identifiers_with_permission_for_user(
+            user=user,
+            permission_to_check=permission_to_check,
+            permission_base_uri=permission_base_uri,
+            process_model_identifiers=process_model_identifiers,
+        )
+
+        reference_cache_processes = ReferenceCacheModel.basic_query().filter_by(type="process").all()
+        process_models = cls.embellish_with_is_executable_property(process_models, reference_cache_processes)
+
+        if filter_runnable_by_user:
+            process_models = cls.filter_by_runnable(process_models, reference_cache_processes)
+
+        permitted_process_models = []
+        for process_model in process_models:
+            process_model_identifier = process_model.id
+            if filter_runnable_as_extension:
+                process_model_identifier = process_model.id.replace(f"{extension_prefix}/", "")
+            if process_model_identifier in permitted_process_model_identifiers:
+                permitted_process_models.append(process_model)
+
+        return permitted_process_models

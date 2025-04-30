@@ -57,6 +57,8 @@ class MessageInstanceModel(SpiffworkflowBaseDBModel):
     created_at_in_seconds: int = db.Column(db.Integer)
     correlation_rules = relationship("MessageInstanceCorrelationRuleModel", back_populates="message_instance", cascade="delete")
 
+    tenant_key = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
+
     @validates("message_type")
     def validate_message_type(self, key: str, value: Any) -> Any:
         return self.validate_enum_field(key, value, MessageTypes)

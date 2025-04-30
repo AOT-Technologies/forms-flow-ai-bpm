@@ -38,3 +38,5 @@ class TaskDefinitionModel(SpiffworkflowBaseDBModel):
 
     updated_at_in_seconds: int = db.Column(db.Integer)
     created_at_in_seconds: int = db.Column(db.Integer)
+
+    tenant_key = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
