@@ -755,7 +755,7 @@ def _create_or_update_process_model_file(
     return make_response(jsonify(file), http_status_to_return)
 
 
-def decision_model_list( latestVersion: bool | None = False,
+def decision_model_list(latestVersion: bool | None = False,
     includeProcessDefinitionsWithoutTenantId: bool | None = False,
     sortBy: str | None = None,
     sortOrder: str | None = None,
@@ -764,7 +764,21 @@ def decision_model_list( latestVersion: bool | None = False,
     nameLike: str | None = None,
     return_count_only: bool | None = False,
 ) -> flask.wrappers.Response:
+    """Returns a list of DMNs
 
+    Keyword Arguments:
+        latestVersion {bool | None} -- **Not used. Keeping for compatibility reasons** (default: {False})
+        includeProcessDefinitionsWithoutTenantId {bool | None} -- **Not used. ** (default: {False})
+        sortBy {str | None} -- **Not used. ** (default: {None})
+        sortOrder {str | None} -- **Not used. ** (default: {None})
+        firstResult {int | None} -- The offset to start the page items from (default: {0})
+        maxResults {int} -- Maximum results per page (default: {100})
+        nameLike {str | None} -- Model name to filter results by (default: {None})
+        return_count_only {bool | None} -- Whether to return only the number of items (default: {False})
+
+    Returns:
+        flask.wrappers.Response
+    """
     page = (firstResult // maxResults) + 1
     per_page = maxResults
     process_models = ProcessModelService.get_dmn_models_for_api(user=g.user, filter_by_name=nameLike)

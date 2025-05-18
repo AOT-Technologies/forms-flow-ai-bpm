@@ -11,6 +11,9 @@ from spiffworkflow_backend.routes.authentication_controller import _get_decoded_
 
 @event.listens_for(db.session, "do_orm_execute")
 def filter_by_tenant_key(execute_state, *args, **kwargs):
+    """Intercepts `select` queries
+    and add filter criteria tenant_key = <logged in user's tenant_key> 
+    """
     statement = execute_state.statement
     model = execute_state.bind_mapper.entity
 
@@ -31,6 +34,16 @@ def filter_by_tenant_key(execute_state, *args, **kwargs):
 @event.listens_for(Mapper, "before_update", retval=True)
 @event.listens_for(Mapper, "before_delete")
 def permission_check_and_set_tenant_key(mapper, connection, target):
+    """Intercepts `insert/update/delete operations
+    For insert/update:
+        - Sets the tenant_key attribute if applicable
+        - Checks if logged in user is from same tenant as the object
+    For delete:
+        - Checks if logged in user is from same tenant as the object
+
+    Raises:
+        NotAuthorizedError: Raised if the logged in user is not from same tenant as of the object
+    """
     has_tenant_key = hasattr(target, "tenant_key")
     if has_tenant_key and config_from_env("MULTI_TENANCY_ENABLED", default=False):
         if getattr(g, 'token', None) is not None:

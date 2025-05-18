@@ -760,6 +760,25 @@ class ProcessModelService(FileSystemService):
             include_files: bool | None = False,
             filter_by_name: str | None = None
     ) -> list[ProcessModelInfo]:
+        """Query and return DMN models
+
+        Arguments:
+            user {UserModel} -- The logged in user
+
+        Keyword Arguments:
+            process_group_id {str | None} -- ** Not in use **The process group id (same as message key) (default: {None})
+            recursive {bool | None} -- **Not in use. Keeping for compatibility with internal Spiff methods** (default: {False})
+            filter_runnable_by_user {bool | None} -- Only return models the user has permission to start (default: {False})
+            filter_runnable_as_extension {bool | None} -- Only return models that can be run as an extension (default: {False})
+            include_files {bool | None} -- ** Not used ** (default: {False})
+            filter_by_name {str | None} -- Name or part of a name to filter by. (default: {None})
+
+        Raises:
+            Exception: _description_
+
+        Returns:
+            list[ProcessModelInfo] -- _description_
+        """
         if filter_runnable_as_extension and filter_runnable_by_user:
             raise Exception(
                 "It is not valid to filter process models by both filter_runnable_by_user and filter_runnable_as_extension"
