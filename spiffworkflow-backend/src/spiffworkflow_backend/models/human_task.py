@@ -60,6 +60,8 @@ class HumanTaskModel(SpiffworkflowBaseDBModel):
         order_by="HumanTaskUserModel.id",
     )
 
+    tenant_key = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
+
     @classmethod
     def to_task(cls, task: HumanTaskModel) -> Task:
         can_complete = False

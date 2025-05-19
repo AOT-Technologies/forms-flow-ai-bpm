@@ -83,6 +83,8 @@ class TaskModel(SpiffworkflowBaseDBModel):
     name_for_display: str | None = None
     signal_buttons: list[dict] | None = None
 
+    tenant_key = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
+
     def get_data(self) -> dict:
         return {**self.python_env_data(), **self.json_data()}
 

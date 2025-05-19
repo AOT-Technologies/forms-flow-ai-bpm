@@ -148,7 +148,7 @@ class UserService:
             return
         # Create group if it doesn't exist
         current_user_group_assignments = []
-        token_groups = token_info.get('groups', []) + token_info.get('role', [])
+        token_groups = token_info.get('groups', []) + token_info.get('role', []) + token_info.get('roles', [])
         for token_group in token_groups:
             token_group = token_group.lstrip("/")
             group: GroupModel = GroupModel.query.filter_by(identifier=token_group).one_or_none()

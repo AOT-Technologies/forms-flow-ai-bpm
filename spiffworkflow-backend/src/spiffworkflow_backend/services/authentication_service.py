@@ -318,6 +318,9 @@ class AuthenticationService:
         aud = decoded_token["aud"] if "aud" in decoded_token else None
         azp = decoded_token["azp"] if "azp" in decoded_token else None
         iat = decoded_token["iat"]
+        tenant_key = decoded_token["tenantKey"]
+        if tenant_key:
+            azp = azp.split(f'{tenant_key}-')[1]
 
         valid_audience_values = cls.valid_audiences(authentication_identifier)
         audience_array_in_token = aud
