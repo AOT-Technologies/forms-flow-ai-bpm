@@ -11,7 +11,9 @@ from sqlalchemy import event
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.orm.mapper import Mapper
 
-db = SQLAlchemy()
+from spiffworkflow_backend.db_session import CustomSession
+
+db = SQLAlchemy(session_options={"class_": CustomSession})
 migrate = Migrate()
 
 

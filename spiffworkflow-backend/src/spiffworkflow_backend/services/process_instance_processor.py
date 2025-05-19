@@ -81,7 +81,7 @@ from spiffworkflow_backend.models.process_instance import ProcessInstanceModel
 from spiffworkflow_backend.models.process_instance import ProcessInstanceStatus
 from spiffworkflow_backend.models.process_instance_event import ProcessInstanceEventType
 from spiffworkflow_backend.models.process_instance_metadata import ProcessInstanceMetadataModel
-from spiffworkflow_backend.models.process_model import ProcessModelInfo
+from spiffworkflow_backend.models.process_model import ProcessModelInfo, ProcessType
 from spiffworkflow_backend.models.reference_cache import ReferenceCacheModel
 from spiffworkflow_backend.models.script_attributes_context import ScriptAttributesContext
 from spiffworkflow_backend.models.task import TaskModel
@@ -1428,13 +1428,16 @@ class ProcessInstanceProcessor:
             # ignore identifiers that spiff already knows about
             if bpmn_process_identifier in bpmn_process_identifiers_in_parser:
                 continue
-
+            process_model: ProcessModelInfo = ProcessModelService.find_by_process_id(bpmn_process_identifier)
+            if process_model.type == ProcessType.BPMN.value:
+                parser.add_bpmn_str(str(process_model.content))
+            elif process_model.type == ProcessType.DMN.value:
+                parser.add_dmn_str(str(process_model.content))
             # new_bpmn_file_full_path = ProcessInstanceProcessor.bpmn_file_full_path_from_bpmn_process_identifier(
             #     bpmn_process_identifier
             # )
             # new_bpmn_files.add(new_bpmn_file_full_path)
-            new_bpmn_files.add(bpmn_process_identifier)
-            # TODO Add parsing for DMN files.
+            # new_bpmn_files.add(bpmn_process_identifier)
             # dmn_file_glob = os.path.join(os.path.dirname(new_bpmn_file_full_path), "*.dmn")
             # parser.add_dmn_files_by_glob(dmn_file_glob)
             processed_identifiers.add(bpmn_process_identifier)

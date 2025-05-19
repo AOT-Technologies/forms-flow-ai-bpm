@@ -24,6 +24,8 @@ class MessageModel(SpiffworkflowBaseDBModel):
 
     correlation_properties = relationship("MessageCorrelationPropertyModel", cascade="delete")
 
+    tenant_key = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
+
 
 @dataclass
 class MessageCorrelationPropertyModel(SpiffworkflowBaseDBModel):

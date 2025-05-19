@@ -112,6 +112,8 @@ class ProcessInstanceModel(SpiffworkflowBaseDBModel):
 
     actions: dict | None = None
 
+    tenant_key = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
+
     def spiffworkflow_fully_initialized(self) -> bool:
         """We have created process definitions and processes.
 

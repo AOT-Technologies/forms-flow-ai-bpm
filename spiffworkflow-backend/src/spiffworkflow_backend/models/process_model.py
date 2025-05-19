@@ -70,6 +70,8 @@ class ProcessModelInfo(SpiffworkflowBaseDBModel):
     # parent_groups: list[ProcessGroupLite] | None = None
     bpmn_version_control_identifier = db.Column(db.String)
 
+    tenant_key = db.Column(db.String, allow_blank=True, allow_none=True, default=None)
+
     @property
     def exception_notification_addresses(self):
         return []

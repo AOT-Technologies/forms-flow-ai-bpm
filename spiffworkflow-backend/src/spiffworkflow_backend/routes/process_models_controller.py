@@ -5,7 +5,7 @@ import re
 import string
 import uuid
 from hashlib import sha256
-from typing import Any
+from typing import Any, Dict
 
 import connexion  # type: ignore
 import flask.wrappers
@@ -50,7 +50,7 @@ from lxml import etree  # type: ignore
 from spiffworkflow_backend.routes.process_instances_controller import process_instance_create
 
 
-def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Response:
+def process_model_create_formsflow(upload: FileStorage, body: Dict) -> flask.wrappers.Response:
 
     _get_process_group_from_modified_identifier("formsflow")
 
@@ -72,11 +72,16 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
         if ProcessType.BPMN.value in namespace:
             parser.add_bpmn_xml(element)
             parser._find_dependencies(element)
+            dependencies = parser.get_process_dependencies()
             dmn_dependencies = parser.get_dmn_dependencies()
             for dmn_dependency in dmn_dependencies:
                 dmn_model = ProcessModelService.find_dmn_by_process_id(dmn_dependency)
                 elm = etree.fromstring(dmn_model.content, parser=etree_xml_parser)
                 parser.add_dmn_xml(elm)
+            for dependency in dependencies:
+                dmn_model = ProcessModelService.find_by_process_id(dependency)
+                elm = etree.fromstring(dmn_model.content, parser=etree_xml_parser)
+                parser.add_bpmn_xml(elm)
             pids = parser.get_process_ids()
             subprocesses = parser.get_subprocess_specs(name=pids[0])
             process_type = ProcessType.BPMN.value
@@ -97,7 +102,8 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
                                                                         id=_key,
                                                                         primary_process_id=_key,
                                                                         primary_file_name=f"{_key}.{process_type}",
-                                                                        type=process_type
+                                                                        type=process_type,
+                                                                        tenant_key=body["tenant-id"]
                                                                     )
     if process_model_info is None:
         raise ApiError(
@@ -113,7 +119,8 @@ def process_model_create_formsflow(upload: FileStorage) -> flask.wrappers.Respon
                                                                            content=_content,
                                                                            id=key,
                                                                            primary_process_id=_key,
-                                                                           primary_file_name=f"{_key}.bpmn"
+                                                                           primary_file_name=f"{_key}.bpmn",
+                                                                           tenant_key=body["tenant-id"]
                                                                         )
         ProcessModelService.add_process_model(subprocess_model)
 
@@ -139,7 +146,6 @@ def process_definition_list(
 
     page = (firstResult // maxResults) + 1
     per_page = maxResults
-
     process_models = ProcessModelService.get_process_models_for_api(user=g.user, filter_by_name=nameLike)
     process_models_to_return = ProcessModelService.get_batch(process_models, page=page, per_page=per_page)
 
@@ -148,7 +154,7 @@ def process_definition_list(
         {
             "id": model.id,
             "key": model.id,  # Assuming 'key' is same as 'id'
-            "tenantId": None,  # TODO: Need to update
+            "tenantId": model.tenant_key,
             "name": model.display_name,
             "description": model.description,
             "version": 1,  # Assuming version 1
@@ -747,3 +753,60 @@ def _create_or_update_process_model_file(
         DataSetupService.save_all_process_models()
 
     return make_response(jsonify(file), http_status_to_return)
+
+
+def decision_model_list(latestVersion: bool | None = False,
+    includeProcessDefinitionsWithoutTenantId: bool | None = False,
+    sortBy: str | None = None,
+    sortOrder: str | None = None,
+    firstResult: int | None = 0,
+    maxResults: int = 100,
+    nameLike: str | None = None,
+    return_count_only: bool | None = False,
+) -> flask.wrappers.Response:
+    """Returns a list of DMNs
+
+    Keyword Arguments:
+        latestVersion {bool | None} -- **Not used. Keeping for compatibility reasons** (default: {False})
+        includeProcessDefinitionsWithoutTenantId {bool | None} -- **Not used. ** (default: {False})
+        sortBy {str | None} -- **Not used. ** (default: {None})
+        sortOrder {str | None} -- **Not used. ** (default: {None})
+        firstResult {int | None} -- The offset to start the page items from (default: {0})
+        maxResults {int} -- Maximum results per page (default: {100})
+        nameLike {str | None} -- Model name to filter results by (default: {None})
+        return_count_only {bool | None} -- Whether to return only the number of items (default: {False})
+
+    Returns:
+        flask.wrappers.Response
+    """
+    page = (firstResult // maxResults) + 1
+    per_page = maxResults
+    process_models = ProcessModelService.get_dmn_models_for_api(user=g.user, filter_by_name=nameLike)
+    process_models_to_return = ProcessModelService.get_batch(process_models, page=page, per_page=per_page)
+
+    # Convert to desired format
+    converted_process_models = [
+        {
+            "id": model.id,
+            "key": model.id,  # Assuming 'key' is same as 'id'
+            "tenantId": model.tenant_key,
+            "name": model.display_name,
+            "description": model.description,
+            "version": 1,  # Assuming version 1
+            "resource": model.files[0].name if model.files else None,
+            "deploymentId": "some_deployment_id",  # TODO: Placeholder, update with actual
+            "suspended": False,  # TODO: Do something based on model.fault_or_suspend_on_exception
+        }
+        for model in process_models_to_return
+    ]
+
+    if return_count_only:
+        return make_response(jsonify({"count": len(converted_process_models)}), 200)
+
+    return make_response(jsonify(converted_process_models), 200)
+
+
+def decision_model_xml(decision_key) -> flask.wrappers.Response:
+    decision_model = ProcessModelService.find_dmn_by_process_id(decision_key)
+    return make_response(jsonify({"id": decision_model.id,
+                                  "dmnXml": decision_model.content}))
