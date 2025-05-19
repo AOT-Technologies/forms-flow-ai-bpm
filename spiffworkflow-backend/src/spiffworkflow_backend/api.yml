@@ -5,7 +5,7 @@ info:
   license:
     name: LGPL
 servers:
-  - url: http://localhost:5000/v1.0
+  - url: http://localhost:8000/v1.0
 # this is handled in flask now
 security: []
 
@@ -3600,6 +3600,87 @@ paths:
             application/json:
               schema:
                 type: object
+  /decision-definition:
+    parameters:
+      - name: latestVersion
+        in: query
+        required: false
+        description: Return only the latest version of each process definition
+        schema:
+          type: boolean
+      - name: includeProcessDefinitionsWithoutTenantId
+        in: query
+        required: false
+        description: Include process definitions that do not have a tenant ID
+        schema:
+          type: boolean
+      - name: sortBy
+        in: query
+        required: false
+        description: Sort the results by the given field
+        schema:
+          type: string
+      - name: sortOrder
+        in: query
+        required: false
+        description: Sort the results in the specified order (asc or desc)
+        schema:
+          type: string
+      - name: firstResult
+        in: query
+        required: false
+        description: Count of the first result to return
+        schema:
+          type: integer
+      - name: maxResults
+        in: query
+        required: false
+        description: Maximum number of results to return
+        schema:
+          type: integer
+      - name: nameLike
+        in: query
+        required: false
+        description: Filter with name
+        schema:
+          type: string
+    get:
+      operationId: spiffworkflow_backend.routes.process_models_controller.decision_model_list
+      summary: Return a list of DMN definitions
+      tags:
+        - Decision Definitions
+      responses:
+        "200":
+          description: Successfully return the requested decision definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProcessModel"
+  /decision-definition/key/{decision_key}/xml:
+    parameters:
+      - name: decision_key
+        in: path
+        required: true
+        description: "The unique id of an existing decision model."
+        schema:
+          type: string
+    get:
+      operationId: spiffworkflow_backend.routes.process_models_controller.decision_model_xml
+      summary: Return the XML definition of a decision model
+      tags:
+        - Decision Definition
+        - XML
+      responses:
+        "200":
+          description: Successfully return the requested decision definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProcessModel"
 
 components:
   securitySchemes:
