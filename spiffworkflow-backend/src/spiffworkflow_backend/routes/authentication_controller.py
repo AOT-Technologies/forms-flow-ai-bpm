@@ -439,11 +439,18 @@ def _get_decoded_token(token: str) -> dict:
 
 
 def _get_authentication_identifier_from_request() -> str:
-    if "authentication_identifier" in request.cookies:
-        return request.cookies["authentication_identifier"]
-    if "SpiffWorkflow-Authentication-Identifier" in request.headers:
-        authentication_identifier: str = request.headers["SpiffWorkflow-Authentication-Identifier"]
-        return authentication_identifier
+    try:
+        if "authentication_identifier" in request.cookies:
+            return request.cookies["authentication_identifier"]
+        if "SpiffWorkflow-Authentication-Identifier" in request.headers:
+            authentication_identifier: str = request.headers["SpiffWorkflow-Authentication-Identifier"]
+            return authentication_identifier
+    except RuntimeError as e:
+        # RuntimeError happens when Celery worker invokes this
+        # because there are no active request context
+        # TODO: Introduce an ENV variable to identify if run in celery mode or as flask app
+        # TODO: and raise exception or do nothing based on that.
+        print(str(e))
     return "default"
 
 

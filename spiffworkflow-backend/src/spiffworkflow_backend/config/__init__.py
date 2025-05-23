@@ -15,7 +15,8 @@ from dotenv import find_dotenv, load_dotenv
 
 
 # this will load all the envars from a .env file located in the project root (api)
-load_dotenv(find_dotenv())
+print(find_dotenv())
+load_dotenv(find_dotenv(), override=True)
 
 HTTP_REQUEST_TIMEOUT_SECONDS = 15
 CONNECTOR_PROXY_COMMAND_TIMEOUT = 45

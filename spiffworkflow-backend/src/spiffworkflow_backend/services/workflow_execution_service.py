@@ -636,6 +636,7 @@ class WorkflowExecutionService:
                 message_type="receive",
                 name=event.name,
                 correlation_keys=self.bpmn_process_instance.correlations,
+                tenant_key=self.process_instance_model.tenant_key
             )
             for correlation_property in event.value:
                 message_correlation = MessageInstanceCorrelationRuleModel(
@@ -648,6 +649,7 @@ class WorkflowExecutionService:
             db.session.add(message_instance)
 
             bpmn_process = self.process_instance_model.bpmn_process
+            bpmn_process.tenant_key = self.process_instance_model.tenant_key
 
             if bpmn_process is not None:
                 bpmn_process_correlations = self.bpmn_process_instance.correlations

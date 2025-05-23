@@ -110,7 +110,7 @@ class MessageService:
                     db.session.commit()
 
                 if should_queue_process_instance(receiving_process_instance, execution_mode=execution_mode):
-                    queue_process_instance_if_appropriate(receiving_process_instance, execution_mode=execution_mode)
+                    queue_process_instance_if_appropriate(receiving_process_instance, execution_mode=execution_mode, token_info=g.token)
                 return message_instance_receive
 
             except ProcessInstanceIsAlreadyLockedError:

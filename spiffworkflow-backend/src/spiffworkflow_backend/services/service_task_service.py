@@ -192,6 +192,7 @@ class ServiceTaskDelegate:
         with sentry_sdk.start_span(op="connector_by_name", description=operator_identifier):
             with sentry_sdk.start_span(op="call-connector", description=call_url):
                 params = {k: cls.value_with_secrets_replaced(v["value"]) for k, v in bpmn_params.items()}
+                task_data["task_guid"] = str(spiff_task.id)
                 params["spiff__task_data"] = task_data
 
                 response_text = ""
@@ -199,7 +200,10 @@ class ServiceTaskDelegate:
                 parsed_response: dict = {}
                 try:
                     # this will raise on ConnectionError - like a bad url, and maybe limited other scenarios
-                    proxied_response = requests.post(call_url, json=params, timeout=CONNECTOR_PROXY_COMMAND_TIMEOUT)
+                    headers = {}
+                    if hasattr(g, 'token'):
+                        headers = {"Authorization": f"Bearer {g.token}"}
+                    proxied_response = requests.post(call_url, json=params, timeout=CONNECTOR_PROXY_COMMAND_TIMEOUT, headers=headers)
 
                     status_code = proxied_response.status_code
                     response_text = proxied_response.text

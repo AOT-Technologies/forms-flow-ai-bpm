@@ -1,6 +1,7 @@
 import time
 
 import flask
+from flask import g
 from sqlalchemy import and_
 from sqlalchemy import or_
 
@@ -83,7 +84,8 @@ class BackgroundProcessingService:
             )
             if process_instance and process_instance.allowed_to_run():
                 queue_future_task_if_appropriate(
-                    process_instance, eta_in_seconds=future_task.run_at_in_seconds, task_guid=future_task.guid
+                    process_instance, eta_in_seconds=future_task.run_at_in_seconds, task_guid=future_task.guid,
+                    token_info=g.token
                 )
             else:
                 # if we are not allowed to run the process instance, we should not keep processing the future task

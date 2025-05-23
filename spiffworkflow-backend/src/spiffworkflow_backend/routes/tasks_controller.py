@@ -879,3 +879,39 @@ def _get_potential_owner_usernames(assigned_user: AliasedClass) -> Any:
         )
 
     return potential_owner_usernames_from_group_concat_or_similar
+
+
+def update_task_data_by_guid(task_guid: str, body: dict) -> Any:
+    task_model = TaskModel.query.filter_by(guid=task_guid).first()
+    if task_model is None:
+        raise ApiError(
+            error_code="update_task_data_error",
+            message=f"Could not find Task: {task_guid}.",
+        )
+    process_instance = ProcessInstanceModel.query.filter(ProcessInstanceModel.id == task_model.process_instance_id).first()
+    new_task_data: str = body["new_task_data"]
+    # new_task_data_dict = json.loads(new_task_data)
+    json_data_dict = TaskService.update_json_data_on_db_model_and_return_dict_if_updated(
+        task_model, new_task_data, "json_data_hash"
+    )
+    if json_data_dict is not None:
+        JsonDataModel.insert_or_update_json_data_records({json_data_dict["hash"]: json_data_dict})
+        ProcessInstanceTmpService.add_event_to_process_instance(
+            process_instance,
+            ProcessInstanceEventType.task_data_edited.value,
+            task_guid=task_guid,
+        )
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        raise ApiError(
+            error_code="update_task_data_error",
+            message=f"Could not update the Instance. Original error is {e}",
+        ) from e
+
+    return Response(
+        json.dumps({"message": "Task data updated"}),
+        status=200,
+        mimetype="application/json",
+    )

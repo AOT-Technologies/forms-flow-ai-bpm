@@ -3681,7 +3681,26 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ProcessModel"
-
+  /task/{task_guid}/update-data:
+    parameters:
+      - name: task_guid
+        in: path
+        required: true
+        description: The unique id of the task.
+        schema:
+          type: string
+    put:
+      operationId: spiffworkflow_backend.routes.tasks_controller.update_task_data_by_guid
+      summary: Update the task data for requested task
+      tags:
+        - Process Instances
+      responses:
+        "200":
+          description: Task Updated Successfully
+          content:
+            application/json:
+              schema:
+                type: object
 components:
   securitySchemes:
     oAuth2AuthCode:
