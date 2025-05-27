@@ -25,7 +25,7 @@ class ApplicationState(ConnectorCommand):
             logs.append("Preparing payload")
             payload = self._prepare_payload(task_data)
             logs.append("Calling API")
-            application_id = task_data["data"]["applicationId"] # type: ignore
+            application_id = task_data["data"]["applicationId"]  # type: ignore
             response_json, status_code = WebAPIService.update_application_state(
                 application_id, payload
             )

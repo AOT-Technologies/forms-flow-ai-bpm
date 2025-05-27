@@ -19,7 +19,6 @@ class FormSubmission(ConnectorCommand):
         error: CommandErrorDict | None = None
         logs = []
         try:
-            logs.append("Creating submission")
             logs.append("Fetching last submission")
             formio_service = FormIOService()
             form_url = task_data["data"]["formUrl"]  # type: ignore

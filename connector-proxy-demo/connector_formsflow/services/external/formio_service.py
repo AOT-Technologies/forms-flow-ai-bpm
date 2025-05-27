@@ -33,8 +33,6 @@ class FormIOService:
             token=formio_token, token_header_key="x-jwt-token"
         ) as session:
             response = session.patch(form_url, json=payload)
-            print(response)
-            print(response.json())
             return response.json(), response.status_code
 
     def generate_formio_token(self):
@@ -69,12 +67,10 @@ class FormIOService:
             token=formio_token, token_header_key="x-jwt-token"
         ) as session:
             response = session.get(form_url)
-            print(response)
             if response.status_code != HTTPStatus.OK:
                 raise Exception(
                     f"Failed to fetch submission. API response: {response.json()}"
                 )
-            print(response.json())
             return response.json()
 
     def create_revision(self, form_url: str, submission: Dict) -> str:
@@ -92,12 +88,10 @@ class FormIOService:
             token=formio_token, token_header_key="x-jwt-token"
         ) as session:
             response = session.post(form_url, json=submission)
-            print(response)
             if response.status_code != HTTPStatus.CREATED:
                 raise Exception(
                     f"Failed to create submission. API response: {response.json()}"
                 )
-            print(response.json())
             new_submission = response.json()
             return new_submission["_id"]
 

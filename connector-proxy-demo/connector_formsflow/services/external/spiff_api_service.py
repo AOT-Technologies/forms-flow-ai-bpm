@@ -26,7 +26,6 @@ class SpiffBackendService:
         token = get_token_info()
         with session_with_auth(token) as session:
             response = session.put(url, json=payload)
-            current_app.logger.info(response.json())
             if response.status_code != HTTPStatus.OK:
                 raise Exception(
                     f"Failed to update task data. API response: {response.json()}"
