@@ -94,16 +94,20 @@ def filter_tasks_count(body: Dict) -> flask.wrappers.Response:
 
     return response
 
+
 def build_human_tasks_query(body: Dict, user_model: UserModel):
     """Build the base query for filtering tasks."""
     human_tasks_query = (
         db.session.query(
-            HumanTaskModel, ProcessInstanceModel.id, ProcessModelInfo,
+            HumanTaskModel,
+            ProcessInstanceModel.id,
+            ProcessModelInfo,
             func.max(UserModel.username).label("process_initiator_username"),
             func.max(UserModel.display_name).label("process_initiator_firstname"),
             func.max(UserModel.email).label("process_initiator_email"),
-            func.max(GroupModel.identifier).label("assigned_user_group_identifier")
-        ).distinct(HumanTaskModel.id)
+            func.max(GroupModel.identifier).label("assigned_user_group_identifier"),
+        )
+        .distinct(HumanTaskModel.id)
         .group_by(
             HumanTaskModel.id,  # Group by the ID of the human task
             ProcessInstanceModel.id,  # Add the process instance ID to the GROUP BY clause
@@ -111,11 +115,17 @@ def build_human_tasks_query(body: Dict, user_model: UserModel):
         )
         .outerjoin(GroupModel, GroupModel.id == HumanTaskModel.lane_assignment_id)
         .join(ProcessInstanceModel)
-        .join(ProcessModelInfo, ProcessModelInfo.id == ProcessInstanceModel.process_model_identifier)
-        .outerjoin(HumanTaskUserModel, and_(
-            HumanTaskModel.id == HumanTaskUserModel.human_task_id,
-            HumanTaskUserModel.ended_at_in_seconds == None
-        ))
+        .join(
+            ProcessModelInfo,
+            ProcessModelInfo.id == ProcessInstanceModel.process_model_identifier,
+        )
+        .outerjoin(
+            HumanTaskUserModel,
+            and_(
+                HumanTaskModel.id == HumanTaskUserModel.human_task_id,
+                HumanTaskUserModel.ended_at_in_seconds == None,
+            ),
+        )
         .outerjoin(UserModel, UserModel.id == HumanTaskUserModel.user_id)
         .outerjoin(TaskModel, TaskModel.guid == HumanTaskModel.task_id)
         .outerjoin(JsonDataModel, JsonDataModel.hash == TaskModel.json_data_hash)
@@ -148,7 +158,7 @@ def build_human_tasks_query(body: Dict, user_model: UserModel):
             var_name = variable.get('name')
             var_value = variable.get('value')
             json_field = JsonDataModel.data['data'].op('->>')(var_name)
-            human_tasks_query = human_tasks_query.filter(cast(json_field, String) == var_value)
+            human_tasks_query = human_tasks_query.filter(cast(json_field, String).ilike(f"%{var_value}%"))
 
     return human_tasks_query
 
@@ -231,7 +241,6 @@ def get_task_by_id(
         )
     human_task, human_task_user, user_model = tasks[0]
     return make_response(jsonify(format_human_task_response(human_task, user_model)), 200)
-
 
 
 def claim_task(
@@ -320,7 +329,6 @@ def _format_task_variables(task_data: Dict):
     return variables
 
 
-
 def _format_response(human_tasks):
     response = []
 
@@ -377,42 +385,44 @@ def _format_response(human_tasks):
         tasks.append(task_data)
 
     # Remove duplicates from the assignees list based on unique username
-    assignees = list({
-                         task.process_initiator_username: {
-                             "_links": {
-                                 "self": {
-                                     "href": f"/user/{task.process_initiator_username}"
-                                 }
-                             },
-                             "_embedded": None,
-                             "id": task.process_initiator_username,
-                             "firstName": task.process_initiator_firstname,
-                             "lastName": "",  # Replace with actual data if available
-                             "email": task.process_initiator_email
-                         }
-                         for task in human_tasks.items
-                     }.values())
+    assignees = list(
+        {
+            task.process_initiator_username: {
+                "_links": {
+                    "self": {"href": f"/user/{task.process_initiator_username}"}
+                },
+                "_embedded": None,
+                "id": task.process_initiator_username,
+                "firstName": task.process_initiator_firstname,
+                "lastName": "",  # Replace with actual data if available
+                "email": task.process_initiator_email,
+            }
+            for task in human_tasks.items
+        }.values()
+    )
 
     # Remove duplicates from processDefinition list based on unique process ID
-    process_definitions = list({
-                                   task.ProcessModelInfo.id: {
-                                       "_links": {},
-                                       "_embedded": None,
-                                       "id": task.ProcessModelInfo.id,
-                                       "key": task.ProcessModelInfo.process_id,
-                                       "category": "http://bpmn.io/schema/bpmn",
-                                       "description": task.ProcessModelInfo.description,
-                                       "name": task.ProcessModelInfo.display_name,
-                                       "versionTag": "1",  # TODO Replace with actual version if available
-                                       "version": 1,  # TODO Replace with actual version if available
-                                       "resource": f"{task.ProcessModelInfo.display_name}.bpmn",
-                                       "deploymentId": task.ProcessModelInfo.id,
-                                       "diagram": None,
-                                       "suspended": False,
-                                       "contextPath": None
-                                   }
-                                   for task in human_tasks.items
-                               }.values())
+    process_definitions = list(
+        {
+            task.ProcessModelInfo.id: {
+                "_links": {},
+                "_embedded": None,
+                "id": task.ProcessModelInfo.id,
+                "key": task.ProcessModelInfo.process_id,
+                "category": "http://bpmn.io/schema/bpmn",
+                "description": task.ProcessModelInfo.description,
+                "name": task.ProcessModelInfo.display_name,
+                "versionTag": "1",  # TODO Replace with actual version if available
+                "version": 1,  # TODO Replace with actual version if available
+                "resource": f"{task.ProcessModelInfo.display_name}.bpmn",
+                "deploymentId": task.ProcessModelInfo.id,
+                "diagram": None,
+                "suspended": False,
+                "contextPath": None,
+            }
+            for task in human_tasks.items
+        }.values()
+    )
 
     response.append({
         "_links": {},
