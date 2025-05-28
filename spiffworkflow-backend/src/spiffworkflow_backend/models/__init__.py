@@ -8,18 +8,21 @@ from spiffworkflow_backend.models.db import db
 from spiffworkflow_backend.models.task import TaskModel
 from spiffworkflow_backend.routes.authentication_controller import _get_decoded_token
 
+import inspect
+import traceback
+
 
 @event.listens_for(db.session, "do_orm_execute")
 def filter_by_tenant_key(execute_state, *args, **kwargs):
     """Intercepts `select` queries
-    and add filter criteria tenant_key = <logged in user's tenant_key> 
+    and add filter criteria tenant_key = <logged in user's tenant_key>
     """
     statement = execute_state.statement
     model = execute_state.bind_mapper.entity
 
     has_tenant_key = hasattr(model, "tenant_key")
     if has_tenant_key and config_from_env("MULTI_TENANCY_ENABLED", default=False):
-        if getattr(g, 'token', None) is not None:
+        if getattr(g, "token", None) is not None:
             decoded_token = _get_decoded_token(g.token)
             execute_state.statement = statement.options(
                 with_loader_criteria(
@@ -46,7 +49,7 @@ def permission_check_and_set_tenant_key(mapper, connection, target):
     """
     has_tenant_key = hasattr(target, "tenant_key")
     if has_tenant_key and config_from_env("MULTI_TENANCY_ENABLED", default=False):
-        if getattr(g, 'token', None) is not None:
+        if getattr(g, "token", None) is not None:
             decoded_token = _get_decoded_token(g.token)
             if target.tenant_key and target.tenant_key != decoded_token["tenantKey"]:
                 raise NotAuthorizedError(

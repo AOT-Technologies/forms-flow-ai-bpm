@@ -2,9 +2,29 @@ import os
 
 from spiffworkflow_proxy.blueprint import proxy_blueprint
 from flask import Flask
+from dotenv import find_dotenv, load_dotenv
+
+
+# this will load all the envars from a .env file located in the project root (api)
+load_dotenv(find_dotenv())
+
 
 app = Flask(__name__)
 app.config.from_pyfile("config.py", silent=True)
+app.config["SPIFFWORKFLOW_BACKEND_AUTH_CONFIGS"] = [
+    {
+        "identifier": "default",
+        "label": "Default",
+        "uri": app.config.get("SPIFFWORKFLOW_BACKEND_OPEN_ID_SERVER_URL"),
+        "client_id": app.config.get("SPIFFWORKFLOW_BACKEND_OPEN_ID_CLIENT_ID"),
+        "client_secret": app.config.get(
+            "SPIFFWORKFLOW_BACKEND_OPEN_ID_CLIENT_SECRET_KEY"
+        ),
+        "additional_valid_client_ids": app.config.get(
+            "SPIFFWORKFLOW_BACKEND_OPEN_ID_ADDITIONAL_VALID_CLIENT_IDS"
+        ),
+    }
+]
 
 if app.config.get("ENV", "development") != "production":
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"

@@ -1,7 +1,8 @@
 import time
 
 import celery
-from flask import current_app
+from flask import current_app, g
+import inspect
 
 from spiffworkflow_backend.background_processing import CELERY_TASK_PROCESS_INSTANCE_RUN
 from spiffworkflow_backend.exceptions.api_error import ApiError
@@ -36,14 +37,19 @@ def should_queue_process_instance(process_instance: ProcessInstanceModel, execut
 
 
 def queue_future_task_if_appropriate(
-    process_instance: ProcessInstanceModel, eta_in_seconds: float, task_guid: str | None = None
+    process_instance: ProcessInstanceModel, eta_in_seconds: float, task_guid: str | None = None,
+    token_info: str | None = None
 ) -> bool:
     if queue_enabled_for_process_model(process_instance):
         buffer = 1
         countdown = eta_in_seconds - time.time() + buffer
+        if token_info is None:
+            token_info = getattr(g, "token", None)
+
         args_to_celery = {
             "process_instance_id": process_instance.id,
             "task_guid": task_guid,
+            "token_info": token_info
         }
         # add buffer to countdown to avoid rounding issues and race conditions with spiff. the situation we want to avoid is where
         # we think the timer said to run it at 6:34:11, and we initialize the SpiffWorkflow library,
@@ -64,7 +70,8 @@ def queue_future_task_if_appropriate(
 
 # if waiting, check all waiting tasks and see if theyt are timers. if they are timers, it's not runnable.
 def queue_process_instance_if_appropriate(
-    process_instance: ProcessInstanceModel, execution_mode: str | None = None, task_guid: str | None = None
+    process_instance: ProcessInstanceModel, execution_mode: str | None = None, task_guid: str | None = None,
+    token_info: str | None = None
 ) -> bool:
     # FIXME: we should only run this check if we are NOT in a celery worker
     #
@@ -77,9 +84,11 @@ def queue_process_instance_if_appropriate(
     #         f"Attempted to queue task for process instance {process_instance.id} while the process already has it locked. This"
     #         " can lead to further locking issues."
     #     )
+    if token_info is None:
+        token_info = getattr(g, "token", None)
 
     if should_queue_process_instance(process_instance, execution_mode):
-        async_result = celery.current_app.send_task(CELERY_TASK_PROCESS_INSTANCE_RUN, (process_instance.id, task_guid))
+        async_result = celery.current_app.send_task(CELERY_TASK_PROCESS_INSTANCE_RUN, (process_instance.id, task_guid, token_info))
         current_app.logger.info(f"Queueing process instance ({process_instance.id}) for celery ({async_result.task_id})")
         return True
     return False

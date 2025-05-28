@@ -1,6 +1,6 @@
 from billiard import current_process  # type: ignore
 from celery import shared_task
-from flask import current_app
+from flask import current_app, g
 
 from spiffworkflow_backend.background_processing.celery_tasks.process_instance_task_producer import (
     queue_process_instance_if_appropriate,
@@ -25,8 +25,12 @@ class SpiffCeleryWorkerError(Exception):
 
 # ignore types so we can use self and get the celery task id from self.request.id.
 @shared_task(ignore_result=False, time_limit=ten_minutes, bind=True)
-def celery_task_process_instance_run(self, process_instance_id: int, task_guid: str | None = None) -> dict:  # type: ignore
+def celery_task_process_instance_run(self, process_instance_id: int, task_guid: str | None = None, 
+                                     token_info: str | None = None) -> dict:  # type: ignore
     proc_index = current_process().index
+    # proc_index = 0  # For local testing in windows.
+    if token_info:
+        g.token = token_info
 
     celery_task_id = self.request.id
     logger_prefix = f"celery_task_process_instance_run[{celery_task_id}]"
