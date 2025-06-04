@@ -6,7 +6,7 @@ from spiffworkflow_backend.helpers.spiff_enum import ProcessInstanceExecutionMod
 # ruff: noqa: I001
 
 import json
-from typing import Any
+from typing import Any, Dict
 import time
 
 import copy
@@ -748,3 +748,19 @@ def _process_instance_create(
         process_model_identifier, g.user
     )
     return process_instance
+
+
+def check_process_instance_status(process_instance_id: int):
+    """Checks if a process instance is fully initialized
+
+    Arguments:
+        process_instance_id {int} -- Unique ID of the process instance
+
+    Returns:
+        Dict -- {'status': <initialized or not>}
+    """
+    process_instance: ProcessInstanceModel = (
+        ProcessInstanceService().get_process_instance(process_instance_id)
+    )
+    is_initialized = process_instance.spiffworkflow_fully_initialized()
+    return make_response(jsonify({"status": is_initialized}), 200)

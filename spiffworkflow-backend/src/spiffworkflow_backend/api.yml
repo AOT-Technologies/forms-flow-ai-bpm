@@ -3701,6 +3701,27 @@ paths:
             application/json:
               schema:
                 type: object
+  /process-instance/{process_instance_id}/is-initialized:
+    parameters:
+      - name: process_instance_id
+        in: path
+        required: true
+        description: The unique id of an existing process instance.
+        schema:
+          type: string
+    get:
+      operationId: spiffworkflow_backend.routes.process_instances_controller.check_process_instance_status
+      summary: Checks whether a process is fully initialized
+      tags:
+        - Process Instances
+      
+      responses:
+        "200":
+          description: Process instance workflow initialization status
+          content:
+            application/json:
+              schema:
+                type: object
 components:
   securitySchemes:
     oAuth2AuthCode:
